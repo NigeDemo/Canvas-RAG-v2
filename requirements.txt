@@ -1,0 +1,61 @@
+# Core dependencies
+chromadb>=0.4.0
+openai>=1.0.0
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Canvas LMS integration
+canvasapi>=3.2.0
+
+# HTML and content processing
+beautifulsoup4>=4.12.0
+pypdf>=3.17.0
+
+# PDF and image processing (for future vision features)
+pdf2image>=3.1.0
+Pillow>=10.0.0
+
+# Current embedding model (OpenAI)
+# Note: sentence-transformers not currently used but available for local embeddings
+
+# Sparse retrieval (not currently active but implemented)
+rank-bm25>=0.2.2
+
+# Vector database alternatives
+# qdrant-client>=1.6.0  # Alternative to ChromaDB
+# weaviate-client>=3.25.0  # Alternative to ChromaDB
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Async support
+aiohttp>=3.8.0
+asyncio>=3.4.3
+
+# Data validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Progress bars and logging
+tqdm>=4.66.0
+loguru>=0.7.0
+
+# Optional: Local LLM support (Phase 3)
+# llama-cpp-python>=0.2.0
+# huggingface-hub>=0.17.0
+
+# Optional: Advanced sparse retrieval
+# splade>=0.1.0  # When available
+
+# Utilities
+pathlib>=1.0.0
+typing-extensions>=4.7.0
