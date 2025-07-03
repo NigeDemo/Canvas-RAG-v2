@@ -34,7 +34,14 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
-## 🚀 Quick Start
+## � Repository Statistics
+
+- **Language**: Python
+- **Framework**: Streamlit + OpenAI
+- **Database**: ChromaDB  
+- **Status**: Phase 1 Complete ✅
+
+## �🚀 Quick Start
 
 ### Prerequisites
 
