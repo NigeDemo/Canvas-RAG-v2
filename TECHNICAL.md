@@ -1,5 +1,15 @@
 # Technical Implementation Notes
 
+## Quick Context for New Contributors
+
+**Project**: Canvas RAG v2 - Architecture course content assistant  
+**Domain**: Architecture education, technical drawing analysis  
+**Current Status**: Phase 1 complete (text-based queries work, image refs by filename only)  
+**Next Priority**: Vision AI integration for actual image content analysis  
+**Tech Stack**: Canvas API → Python → OpenAI (embeddings + GPT-4) → ChromaDB → Streamlit  
+
+---
+
 ## Current Architecture (Phase 1)
 
 ### Data Flow

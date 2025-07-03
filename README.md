@@ -185,6 +185,16 @@ Canvas-RAG-v2/
 3. **BM25 Fixes**: Resolve sparse retrieval initialization issues
 4. **Enhanced Prompting**: Improve system prompts for architectural domain
 
+## 📋 **For New Contributors/Agents**
+
+**Quick Understanding**: This system helps architecture students query Canvas course content in natural language. Phase 1 is complete (text search + image filename matching). Phase 2 priority is adding vision AI to actually analyze architectural drawing content.
+
+**Key Files**: `src/ui/chat_app.py` (interface), `src/indexing/vector_store.py` (retrieval), `scripts/run_pipeline.py` (ingestion)
+
+**Test It**: Set up `.env` file → Run pipeline → Start Streamlit app → Ask "show me any image" 
+
+---
+
 ## 🧪 Testing
 
 ```bash

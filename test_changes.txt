@@ -1,0 +1,6 @@
+# Test File for Git Change Detection
+
+This is a test file to demonstrate how Git detects changes.
+
+Current time: 2025-07-03
+Project: Canvas RAG v2
