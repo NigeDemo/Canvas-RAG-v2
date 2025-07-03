@@ -30,7 +30,7 @@
   "chunk_index": 0,
   "source_id": 1440959,
   "title": "construction drawing package",
-  "url": "https://canvas.wlv.ac.uk/courses/45166/pages/..."
+  "url": "https://canvas.yourschool.edu/courses/YOUR_COURSE_ID/pages/..."
 }
 ```
 
@@ -39,7 +39,7 @@
 {
   "content_type": "image_reference", 
   "text": "[Image: 18-1525 - 624 - Bistro - Cafe - Internal Elevations and plan 1 of 2.jpg]",
-  "image_url": "https://canvas.wlv.ac.uk/courses/45166/files/9465701/preview?...",
+  "image_url": "https://canvas.yourschool.edu/courses/YOUR_COURSE_ID/files/FILE_ID/preview?...",
   "alt_text": "18-1525 - 624 - Bistro - Cafe - Internal Elevations and plan 1 of 2.jpg",
   "page_title": "construction drawing package"
 }

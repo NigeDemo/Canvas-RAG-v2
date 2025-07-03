@@ -4,7 +4,7 @@
 import json
 from src.indexing import IndexBuilder
 
-# Load processed content
+# Load processed content (update filename to match your data)
 with open('data/processed/processed_page_construction_drawing_package_2_metadata.json', 'r', encoding='utf-8') as f:
     content_segments = json.load(f)
 

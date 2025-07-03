@@ -77,7 +77,7 @@ streamlit run src/ui/chat_app.py
 #### Option 2: Single Page Ingestion
 ```bash
 # 1. Ingest a specific Canvas page by URL slug
-python scripts/run_pipeline.py --course-id YOUR_COURSE_ID --page-url construction-drawing-package-2
+python scripts/run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
 
 # 2. Start chat interface  
 streamlit run src/ui/chat_app.py
@@ -249,5 +249,5 @@ Canvas page URLs typically have slugs like:
 - `building-sections-and-details`
 
 You can find the page slug in the Canvas URL:
-`https://yourschool.instructure.com/courses/12345/pages/construction-drawing-package-2`
+`https://yourschool.instructure.com/courses/YOUR_COURSE_ID/pages/your-page-slug`
                                                            ↑ This is the page slug

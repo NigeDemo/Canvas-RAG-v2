@@ -26,7 +26,7 @@ Canvas HTML → BeautifulSoup → Text chunks + Image URLs → OpenAI embeddings
 ### Running the System
 ```bash
 1. Copy .env.example to .env (add your API keys)
-2. python scripts/run_pipeline.py --course-id 45166 --page-url construction-drawing-package-2
+2. python scripts/run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
 3. streamlit run src/ui/chat_app.py
 ```
 

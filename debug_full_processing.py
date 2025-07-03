@@ -4,7 +4,7 @@
 import json
 from src.processing.content_processor import ContentProcessor
 
-# Load the raw HTML content
+# Load the raw HTML content (update filename to match your data)
 with open('data/raw/page_construction_drawing_package_2_metadata.json', 'r', encoding='utf-8') as f:
     raw_data = json.load(f)
 
