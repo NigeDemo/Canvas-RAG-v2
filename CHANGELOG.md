@@ -2,7 +2,35 @@
 
 All notable changes to Canvas RAG v2 will be documented in this file.
 
-## [Unreleased] - 2025-07-03
+## [2.0.0] - 2025-07-17 - Phase 2 Complete ✅
+
+### Added
+- **Vision AI Integration**: GPT-4 Vision and Claude Vision API support
+- **Architectural Drawing Analysis**: Detailed analysis of electrical plans, elevations, sections
+- **OCR Capabilities**: Text extraction from architectural drawings
+- **Vision-Enhanced Chat Interface**: New Streamlit app with vision capabilities
+- **Intelligent Caching**: Vision analysis result caching to minimize API costs
+- **Multiple Analysis Types**: Comprehensive, spatial, technical, OCR analysis options
+- **Enhanced Image Processing**: Specialized handling for architectural drawings
+
+### Changed
+- **Primary Interface**: Moved to `src/ui/vision_chat_app.py` for vision-enhanced experience
+- **Query Processing**: Added vision AI integration for image-related queries
+- **Response Generation**: Enhanced with actual visual analysis instead of filename matching
+- **Project Structure**: Organized into professional directories (debug/, tests/, setup/)
+
+### Fixed
+- **Image Reference Extraction**: Fixed dictionary format handling from HybridSearchEngine
+- **Vision AI Pipeline**: Resolved generic response issue with electrical plan queries
+- **Project Organization**: Cleaned up development artifacts for GitHub deployment
+
+### Technical Notes
+- **Phase 2 Complete**: Vision AI integration fully functional
+- **Vision Providers**: GPT-4 Vision (primary), Claude Vision (fallback)
+- **Analysis Capabilities**: 4000+ character detailed responses for architectural drawings
+- **Caching System**: Efficient result caching to avoid redundant API calls
+
+## [1.0.0] - 2025-07-03 - Phase 1 Complete
 
 ### Added
 - LLM-powered response generation using GPT-4

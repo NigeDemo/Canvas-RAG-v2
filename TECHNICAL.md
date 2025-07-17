@@ -4,13 +4,13 @@
 
 **Project**: Canvas RAG v2 - Architecture course content assistant  
 **Domain**: Architecture education, technical drawing analysis  
-**Current Status**: Phase 1 complete (text-based queries work, image refs by filename only)  
-**Next Priority**: Vision AI integration for actual image content analysis  
-**Tech Stack**: Canvas API → Python → OpenAI (embeddings + GPT-4) → ChromaDB → Streamlit  
+**Current Status**: Phase 2 complete (vision AI integration fully implemented)  
+**Next Priority**: Performance optimization and BM25 integration (Phase 3)  
+**Tech Stack**: Canvas API → Python → OpenAI (embeddings + GPT-4 + Vision) → ChromaDB → Streamlit  
 
 ---
 
-## Current Architecture (Phase 1)
+## Current Architecture (Phase 2 Complete)
 
 ### Data Flow
 1. **Canvas Ingestion**: Extract HTML pages and image references
@@ -18,7 +18,8 @@
 3. **Vectorization**: Create embeddings using OpenAI text-embedding-3-large
 4. **Storage**: Store in ChromaDB with metadata
 5. **Retrieval**: Vector similarity search with image reference filtering
-6. **Generation**: GPT-4 synthesis with intelligent prompting
+6. **Vision AI Integration**: GPT-4 Vision analysis for architectural drawings
+7. **Generation**: GPT-4 synthesis with intelligent prompting and vision analysis
 
 ### What Gets Indexed
 
@@ -90,42 +91,37 @@ IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE:
 
 ## Known Issues & Limitations
 
-### 1. No Visual Content Analysis
-- **Issue**: Images are referenced by filename only
-- **Impact**: Cannot answer questions about actual image content
-- **Solution**: Implement GPT-4 Vision or Claude Vision integration
-
-### 2. BM25 Initialization Warnings
+### 1. BM25 Initialization Warnings
 - **Issue**: Sparse retrieval shows "BM25 index not initialized" 
 - **Impact**: Only vector search active (hybrid search disabled)
 - **Solution**: Debug BM25 index building in vector store
 
-### 3. No OCR Capability
-- **Issue**: Cannot extract text from architectural drawings
-- **Impact**: Missing searchable content from technical drawings
-- **Solution**: Add OCR pipeline for image processing
+### 2. Vision Analysis Caching
+- **Issue**: Vision AI calls could be optimized for better performance
+- **Impact**: Repeated analysis of same images
+- **Solution**: Implement more intelligent caching strategies
 
-### 4. Limited Multimodal Understanding
-- **Issue**: Using text-only embeddings
+### 3. Limited Multimodal Understanding
+- **Issue**: Using text-only embeddings for storage
 - **Impact**: Cannot semantically understand image-text relationships
 - **Solution**: Implement true multimodal embeddings (e.g., CLIP, Nomic)
 
 ## Development Priorities
 
-### Phase 2: Vision Integration
-1. Add GPT-4 Vision API calls during content processing
-2. Generate detailed descriptions of architectural drawings
-3. Store visual analysis as searchable text
-4. Implement OCR for text extraction
-
-### Phase 3: Retrieval Enhancement  
+### Phase 3: Performance & Retrieval Enhancement  
 1. Fix BM25 sparse retrieval initialization
 2. Implement proper hybrid fusion
 3. Add SPLADE v2 for enhanced sparse retrieval
-4. Optimize retrieval performance
+4. Optimize vision AI caching and performance
 
 ### Phase 4: True Multimodal
 1. Implement multimodal embeddings
 2. Joint text-image semantic search
 3. Cross-modal retrieval capabilities
 4. Enhanced visual reasoning
+
+### Phase 5: Advanced Features
+1. LTI integration for Canvas
+2. Auto-sync with Canvas updates
+3. Advanced analytics and feedback
+4. Mobile-responsive interface

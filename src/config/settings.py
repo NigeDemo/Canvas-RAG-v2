@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     # OpenAI Configuration
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4-vision-preview", env="OPENAI_MODEL")
+    openai_vision_model: str = Field(default="gpt-4o", env="OPENAI_VISION_MODEL")
+    
+    # Anthropic Configuration (Vision AI)
+    anthropic_api_key: str = Field(default="", env="ANTHROPIC_API_KEY")
+    claude_vision_model: str = Field(default="claude-3-5-sonnet-20241022", env="CLAUDE_VISION_MODEL")
+    
+    # Vision AI Configuration
+    vision_primary_provider: str = Field(default="openai", env="VISION_PRIMARY_PROVIDER")
+    vision_fallback_provider: str = Field(default="claude", env="VISION_FALLBACK_PROVIDER")
+    vision_cache_enabled: bool = Field(default=True, env="VISION_CACHE_ENABLED")
+    vision_cache_ttl_hours: int = Field(default=24, env="VISION_CACHE_TTL_HOURS")
+    cache_dir: str = Field(default="./data/cache", env="CACHE_DIR")
     
     # Google Gemini Configuration
     google_api_key: str = Field(default="", env="GOOGLE_API_KEY")

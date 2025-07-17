@@ -8,13 +8,15 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 - HTML pages with embedded architectural drawings
 - Text content about construction standards and techniques
 - Image references with intelligent retrieval and description
+- **Vision AI analysis of architectural drawings and technical content**
 
 ### Key Features
 
 - **Canvas Integration**: Direct integration with Canvas LMS API for content ingestion
 - **Intelligent Retrieval**: Vector-based search with hybrid retrieval capabilities
 - **LLM-Powered Responses**: Uses GPT-4 for intelligent reasoning and synthesis
-- **Image-Aware Queries**: Specialized handling for image-related questions
+- **Vision AI Analysis**: GPT-4 Vision integration for analyzing architectural drawings
+- **Image-Aware Queries**: Specialized handling for image-related questions with content analysis
 - **Source Linking**: Provides clickable links back to original Canvas content and images
 - **Interactive Chat**: Streamlit-based chat interface with debug capabilities
 - **Flexible Ingestion**: Support for both full course and single-page ingestion
@@ -39,7 +41,7 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 - **Language**: Python
 - **Framework**: Streamlit + OpenAI
 - **Database**: ChromaDB  
-- **Status**: Phase 1 Complete ✅
+- **Status**: Phase 2 Complete ✅
 
 ## �🚀 Quick Start
 
@@ -59,7 +61,7 @@ pip install -r requirements.txt
 
 ### Configuration
 
-1. Copy `.env.example` to `.env`
+1. Copy `.env.template` to `.env`
 2. Add your Canvas API token and OpenAI API key
 3. Configure Canvas base URL
 
@@ -70,8 +72,8 @@ pip install -r requirements.txt
 # 1. Ingest entire Canvas course
 python scripts/run_pipeline.py --course-id YOUR_COURSE_ID
 
-# 2. Start chat interface
-streamlit run src/ui/chat_app.py
+# 2. Start vision-enhanced chat interface
+streamlit run src/ui/vision_chat_app.py
 ```
 
 #### Option 2: Single Page Ingestion
@@ -79,8 +81,8 @@ streamlit run src/ui/chat_app.py
 # 1. Ingest a specific Canvas page by URL slug
 python scripts/run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
 
-# 2. Start chat interface  
-streamlit run src/ui/chat_app.py
+# 2. Start vision-enhanced chat interface  
+streamlit run src/ui/vision_chat_app.py
 ```
 
 #### Option 3: Programmatic Single Page Ingestion
@@ -118,13 +120,15 @@ Canvas-RAG-v2/
 │   ├── indexing/          # Vector store and sparse indexing
 │   ├── retrieval/         # Hybrid search implementation
 │   ├── generation/        # LLM integration and prompting
+│   ├── vision/            # Vision AI integration
 │   ├── ui/               # Streamlit chat interface
 │   └── utils/            # Common utilities
-├── config/               # Configuration files
-├── data/                # Raw and processed data
+├── setup/               # Setup and configuration scripts
+├── scripts/             # Utility scripts
 ├── tests/               # Unit and integration tests
-├── notebooks/           # Development and analysis notebooks
-└── docs/               # Documentation
+├── data/                # Raw and processed data
+├── docs/               # Documentation
+└── logs/               # Application logs
 ```
 
 ## 🛣️ Development Phases
@@ -140,11 +144,11 @@ Canvas-RAG-v2/
 - ✅ Enhanced image query detection
 - ✅ Clickable source links and image URLs
 
-### Phase 2: Visual Analysis Enhancement
-- [ ] Vision AI integration (GPT-4 Vision/Claude Vision)
-- [ ] Automatic image content analysis
-- [ ] OCR extraction from architectural drawings
-- [ ] Enhanced visual reasoning capabilities
+### Phase 2: Visual Analysis Enhancement ✅
+- ✅ Vision AI integration (GPT-4 Vision/Claude Vision)
+- ✅ Automatic image content analysis
+- ✅ OCR extraction from architectural drawings
+- ✅ Enhanced visual reasoning capabilities
 
 ### Phase 3: Retrieval Improvements
 - [ ] BM25 sparse retrieval implementation
@@ -165,33 +169,34 @@ Canvas-RAG-v2/
 
 ## ⚠️ Current Limitations & Future Enhancements
 
-### Current State (Phase 1)
+### Current State (Phase 2 Complete)
 **What Works:**
 - ✅ Canvas content ingestion and processing
 - ✅ Text-based search and retrieval
 - ✅ Image reference extraction and linking
 - ✅ GPT-4 powered intelligent responses
 - ✅ Interactive chat interface
+- ✅ **Vision AI Analysis**: GPT-4 Vision integration for architectural drawing analysis
+- ✅ **OCR Capabilities**: Text extraction from architectural drawings
+- ✅ **Enhanced Visual Reasoning**: Detailed analysis of electrical plans, elevations, and technical drawings
 
 **Current Limitations:**
-- ⚠️ **No Visual Analysis**: Images are referenced by filename only, not analyzed for content
-- ⚠️ **No OCR**: Text within architectural drawings is not extracted
 - ⚠️ **BM25 Not Active**: Sparse retrieval shows warnings (vector search only)
-- ⚠️ **No Vision AI**: Cannot actually "see" or describe image contents
+- ⚠️ **Vision Analysis Caching**: Could be optimized for better performance
 
-### Next Priority Enhancements (Phase 2)
-1. **Vision AI Integration**: Add GPT-4 Vision or Claude Vision for actual image analysis
-2. **OCR Implementation**: Extract text and dimensions from architectural drawings
-3. **BM25 Fixes**: Resolve sparse retrieval initialization issues
-4. **Enhanced Prompting**: Improve system prompts for architectural domain
+### Next Priority Enhancements (Phase 3)
+1. **BM25 Integration**: Implement and fix sparse retrieval for enhanced search
+2. **Vision Analysis Caching**: Optimize vision AI calls with intelligent caching
+3. **Advanced Hybrid Fusion**: Improve retrieval ranking and fusion algorithms
+4. **Performance Optimization**: Enhance response times and resource usage
 
 ## 📋 **For New Contributors/Agents**
 
-**Quick Understanding**: This system helps architecture students query Canvas course content in natural language. Phase 1 is complete (text search + image filename matching). Phase 2 priority is adding vision AI to actually analyze architectural drawing content.
+**Quick Understanding**: This system helps architecture students query Canvas course content in natural language. Phase 1 (text search + image filename matching) and Phase 2 (vision AI integration) are complete. Phase 3 priority is optimizing retrieval and performance.
 
-**Key Files**: `src/ui/chat_app.py` (interface), `src/indexing/vector_store.py` (retrieval), `scripts/run_pipeline.py` (ingestion)
+**Key Files**: `src/ui/chat_app.py` (interface), `src/ui/vision_chat_app.py` (vision-enhanced interface), `src/indexing/vector_store.py` (retrieval), `src/vision/vision_rag_integration.py` (vision AI), `scripts/run_pipeline.py` (ingestion)
 
-**Test It**: Set up `.env` file → Run pipeline → Start Streamlit app → Ask "show me any image" 
+**Test It**: Set up `.env` file → Run pipeline → Start Streamlit app → Ask "Can you describe the electrical plan?" for vision AI demo 
 
 ---
 

@@ -83,3 +83,24 @@ models/
 
 # ChromaDB
 chroma.sqlite3
+
+# Debug directory and temporary files
+debug/
+debug_*.py
+check_*.py
+diagnose_*.py
+fix_*.py
+validate_*.py
+simple_*.py
+temp_*.py
+*_debug.py
+*_temp.py
+*.tmp
+*.log
+test_changes.txt
+CURRENT_ISSUES.md
+*_DEBUG_*.md
+
+# Vision AI cache
+data/cache/
+*.pkl

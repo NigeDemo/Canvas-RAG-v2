@@ -115,15 +115,15 @@ def display_query_analysis(analysis: Dict[str, Any]):
         if analysis.get('keywords'):
             st.write(f"**Key Terms:** {', '.join(analysis['keywords'][:5])}")
 
-def enhanced_image_query(prompt: str, n_results: int = 10) -> Dict[str, Any]:
+def enhanced_image_query(prompt: str, n_results: int = 20) -> Dict[str, Any]:
     """Enhanced query specifically for image-related requests."""
     try:
         retriever = st.session_state.retriever
         
-        # First, try to get some images specifically
+        # First, try to get more images specifically (increase to 20 for image queries)
         image_results = retriever.vector_store.query(
             retriever.embedding_manager.embed_query("image visual example drawing"),
-            n_results=10,
+            n_results=20,
             where={"content_type": "image_reference"}
         )
         
@@ -183,7 +183,7 @@ def simple_query(prompt: str, n_results: int = 10) -> Dict[str, Any]:
         if is_image_query or is_image_phrase:
             # For image queries, try to get more images in results
             safe_log("info", f"Detected image query: '{prompt}' - using enhanced image retrieval")
-            return enhanced_image_query(prompt, n_results)
+            return enhanced_image_query(prompt, n_results=20)  # Use more results for image queries
         else:
             # Perform regular hybrid search
             safe_log("info", f"Regular query: '{prompt}' - using standard retrieval")
@@ -217,11 +217,18 @@ def generate_llm_response(prompt: str, context_results: List[Dict], n_results: i
             text_content = result.get("text", "")
             
             if content_type == "image_reference":
-                image_references.append({
+                # Include vision analysis if available
+                vision_analysis = metadata.get("vision_analysis", "")
+                drawing_type = metadata.get("drawing_type", "unknown")
+                
+                image_ref = {
                     "description": text_content,
                     "alt_text": metadata.get("alt_text", ""),
-                    "url": metadata.get("image_url", "")
-                })
+                    "url": metadata.get("image_url", ""),
+                    "vision_analysis": vision_analysis,
+                    "drawing_type": drawing_type
+                }
+                image_references.append(image_ref)
             else:
                 text_sources.append(text_content)
                 context_text += f"\nSource {i+1}: {text_content}\n"
@@ -253,7 +260,17 @@ Always base your response on the provided context, but synthesize and explain ra
         image_list = []
         for img in image_references[:10]:
             alt_text = f" | Alt: {img['alt_text']}" if img.get('alt_text') else ""
-            image_list.append(f"- **{img['description']}**{alt_text} | URL: {img['url']}")
+            
+            # Include vision analysis if available
+            vision_info = ""
+            if img.get('vision_analysis'):
+                vision_info = f"\n  **Vision Analysis**: {img['vision_analysis'][:200]}..."
+            
+            drawing_type = img.get('drawing_type', 'unknown')
+            if drawing_type != 'unknown':
+                vision_info += f"\n  **Drawing Type**: {drawing_type}"
+            
+            image_list.append(f"- **{img['description']}**{alt_text}{vision_info}\n  **URL**: {img['url']}")
         
         user_prompt = f"""Question: {prompt}
 
@@ -264,13 +281,13 @@ Available Images ({len(image_references)} image references found):
 {chr(10).join(image_list)}
 
 IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE:
-- You have access to {len(image_references)} image references from the Canvas course materials
-- These images are real and available for viewing via the provided URLs
-- When asked about images or visual content, you should reference these specific images
-- You CAN describe what these images show based on their filenames and any alt text
+- You have access to {len(image_references)} image references with detailed vision analysis
+- Each image has been analyzed by AI vision systems to understand its content
+- When describing images, use both the alt text AND the vision analysis provided
+- You can provide specific details about what's shown in each image based on the vision analysis
 - ALWAYS provide the image URLs as clickable markdown links: [Image Description](URL)
-- Do not say you cannot display or see images - you have image references available
-- Include the full URL for each image you mention in your response
+- Include relevant details from the vision analysis in your descriptions
+- For specific image queries, find and describe the most relevant images based on the vision analysis
 
 Please provide a comprehensive, well-reasoned answer using the available context and image references. When mentioning any image, format it as a clickable link."""
 

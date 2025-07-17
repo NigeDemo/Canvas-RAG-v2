@@ -6,6 +6,11 @@ pandas>=2.0.0
 numpy>=1.24.0
 requests>=2.31.0
 
+# Vision AI dependencies (Phase 2)
+anthropic>=0.57.0
+pillow>=10.0.0
+pdf2image>=1.17.0
+
 # Canvas LMS integration
 canvasapi>=3.2.0
 
@@ -13,9 +18,8 @@ canvasapi>=3.2.0
 beautifulsoup4>=4.12.0
 pypdf>=3.17.0
 
-# PDF and image processing (for future vision features)
-pdf2image>=3.1.0
-Pillow>=10.0.0
+# PDF and image processing
+# pdf2image already specified above
 
 # Current embedding model (OpenAI)
 # Note: sentence-transformers not currently used but available for local embeddings
@@ -39,7 +43,7 @@ python-dotenv>=1.0.0
 
 # Async support
 aiohttp>=3.8.0
-asyncio>=3.4.3
+# asyncio>=3.4.3  # Built-in module, not needed in requirements
 
 # Data validation
 pydantic>=2.0.0
@@ -49,6 +53,15 @@ pydantic-settings>=2.0.0
 tqdm>=4.66.0
 loguru>=0.7.0
 
+# HTTP client dependencies (for vision AI)
+httpx>=0.28.0
+httpcore>=1.0.0
+anyio>=4.9.0
+sniffio>=1.3.0
+h11>=0.16.0
+distro>=1.9.0
+jiter>=0.10.0
+
 # Optional: Local LLM support (Phase 3)
 # llama-cpp-python>=0.2.0
 # huggingface-hub>=0.17.0
@@ -57,5 +70,5 @@ loguru>=0.7.0
 # splade>=0.1.0  # When available
 
 # Utilities
-pathlib>=1.0.0
+# pathlib>=1.0.0  # Built-in module, not needed in requirements
 typing-extensions>=4.7.0

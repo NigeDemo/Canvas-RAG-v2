@@ -39,7 +39,7 @@ def check_env_file():
     
     if not env_path.exists():
         print("❌ .env file not found")
-        print("Please copy .env.example to .env and fill in your API credentials")
+        print("Please copy .env.template to .env and fill in your API credentials")
         return False
     
     required_vars = [

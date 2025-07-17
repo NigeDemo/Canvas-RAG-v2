@@ -2,7 +2,7 @@
 
 ## System Architecture
 
-The Canvas RAG v2 system is built with a modular architecture that supports multimodal content processing and hybrid retrieval:
+The Canvas RAG v2 system is built with a modular architecture that supports multimodal content processing, vision AI integration, and hybrid retrieval:
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
@@ -15,12 +15,12 @@ The Canvas RAG v2 system is built with a modular architecture that supports mult
 │  Chat Interface │◀───│  RAG Pipeline    │◀───│ Hybrid Retrieval│
 │  (Streamlit)    │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                    ┌──────────────────┐
-                    │   LLM Response   │
-                    │  (GPT-4/Gemini)  │
-                    └──────────────────┘
+                              │                          │
+                              ▼                          ▼
+                    ┌──────────────────┐    ┌─────────────────┐
+                    │   LLM Response   │    │   Vision AI     │
+                    │  (GPT-4/Gemini)  │    │ (GPT-4 Vision)  │
+                    └──────────────────┘    └─────────────────┘
 ```
 
 ## Core Components

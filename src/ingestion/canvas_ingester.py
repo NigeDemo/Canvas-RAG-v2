@@ -34,6 +34,24 @@ class CanvasIngester:
             
         self.canvas = Canvas(self.api_url, self.api_token)
         self.session = None
+    
+    def get_content_type(self, file: File) -> str:
+        """
+        Get content type from a Canvas file object.
+        
+        Args:
+            file: Canvas file object
+            
+        Returns:
+            Content type string
+        """
+        # Try different attribute names for content type
+        content_type = getattr(file, 'content_type', None)
+        if content_type is None:
+            content_type = getattr(file, 'content-type', '')
+        if content_type is None:
+            content_type = ''
+        return content_type
         
     async def __aenter__(self):
         """Async context manager entry."""
@@ -127,22 +145,35 @@ class CanvasIngester:
             Dictionary with page content and metadata
         """
         try:
+            # Try to get the body content, handling different attribute names
+            body = getattr(page, 'body', None)
+            if body is None:
+                # Try alternative attribute names
+                body = getattr(page, 'content', None)
+            if body is None:
+                # If still no body, try to get it from the page's show method
+                try:
+                    full_page = page.show()
+                    body = getattr(full_page, 'body', '')
+                except:
+                    body = ''
+            
             content = {
-                "id": page.page_id,
-                "title": page.title,
-                "url": page.html_url,
-                "body": page.body or "",
-                "created_at": str(page.created_at) if page.created_at else None,
-                "updated_at": str(page.updated_at) if page.updated_at else None,
+                "id": getattr(page, 'page_id', getattr(page, 'id', 'unknown')),
+                "title": getattr(page, 'title', 'Untitled'),
+                "url": getattr(page, 'html_url', ''),
+                "body": body or "",
+                "created_at": str(page.created_at) if hasattr(page, 'created_at') and page.created_at else None,
+                "updated_at": str(page.updated_at) if hasattr(page, 'updated_at') and page.updated_at else None,
                 "published": getattr(page, 'published', True),
                 "type": "page"
             }
             
-            logger.debug(f"Extracted content from page: {page.title}")
+            logger.debug(f"Extracted content from page: {content['title']}")
             return content
             
         except Exception as e:
-            logger.error(f"Error extracting page content {page.title}: {e}")
+            logger.error(f"Error extracting page content {getattr(page, 'title', 'Unknown')}: {e}")
             return {}
     
     async def ingest_course_content(self, course_id: str) -> Dict[str, List[Any]]:
@@ -176,7 +207,9 @@ class CanvasIngester:
         
         for file in files:
             # Only download PDFs and images for now
-            if file.content_type in ['application/pdf'] or file.content_type.startswith('image/'):
+            content_type = self.get_content_type(file)
+            
+            if content_type in ['application/pdf'] or content_type.startswith('image/'):
                 file_path = await self.download_file(file, download_dir)
                 if file_path:
                     file_info = {
@@ -184,10 +217,10 @@ class CanvasIngester:
                         "filename": file.filename,
                         "path": str(file_path),
                         "url": file.url,
-                        "content_type": file.content_type,
-                        "size": file.size,
-                        "created_at": str(file.created_at) if file.created_at else None,
-                        "updated_at": str(file.updated_at) if file.updated_at else None,
+                        "content_type": content_type,
+                        "size": getattr(file, 'size', 0),
+                        "created_at": str(file.created_at) if hasattr(file, 'created_at') and file.created_at else None,
+                        "updated_at": str(file.updated_at) if hasattr(file, 'updated_at') and file.updated_at else None,
                         "type": "file"
                     }
                     file_paths.append(file_info)
@@ -315,8 +348,10 @@ class CanvasIngester:
         
         for file in referenced_files:
             # Download PDFs and images
-            if (file.content_type in ['application/pdf'] or 
-                file.content_type.startswith('image/')):
+            content_type = self.get_content_type(file)
+            
+            if (content_type in ['application/pdf'] or 
+                content_type.startswith('image/')):
                 
                 file_path = await self.download_file(file, download_dir)
                 if file_path:
@@ -325,10 +360,10 @@ class CanvasIngester:
                         "filename": file.filename,
                         "path": str(file_path),
                         "url": file.url,
-                        "content_type": file.content_type,
-                        "size": file.size,
-                        "created_at": str(file.created_at) if file.created_at else None,
-                        "updated_at": str(file.updated_at) if file.updated_at else None,
+                        "content_type": content_type,
+                        "size": getattr(file, 'size', 0),
+                        "created_at": str(file.created_at) if hasattr(file, 'created_at') and file.created_at else None,
+                        "updated_at": str(file.updated_at) if hasattr(file, 'updated_at') and file.updated_at else None,
                         "type": "file"
                     }
                     file_paths.append(file_info)

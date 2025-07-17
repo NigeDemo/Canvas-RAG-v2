@@ -14,18 +14,106 @@ import re
 
 from ..config.settings import settings
 from ..utils.logger import get_logger
+from ..vision.vision_processor import VisionProcessor
 
 logger = get_logger(__name__)
 
 class ContentProcessor:
     """Processes various content types for the RAG system."""
     
-    def __init__(self):
+    def __init__(self, enable_vision: bool = True):
         """Initialize the content processor."""
         self.max_image_size = settings.max_image_size
         self.pdf_dpi = settings.pdf_dpi
         self.chunk_size = settings.chunk_size
         self.chunk_overlap = settings.chunk_overlap
+        self.enable_vision = enable_vision
+        
+        # Initialize vision processor if enabled
+        if enable_vision:
+            try:
+                self.vision_processor = VisionProcessor(
+                    primary_provider=settings.vision_primary_provider,
+                    fallback_provider=settings.vision_fallback_provider,
+                    use_cache=True
+                )
+                logger.info("Vision AI enabled for content processing")
+            except Exception as e:
+                logger.warning(f"Failed to initialize vision processor: {e}")
+                self.vision_processor = None
+                self.enable_vision = False
+        else:
+            self.vision_processor = None
+            logger.info("Vision AI disabled for content processing")
+    
+    def _analyze_image_content(self, image_input, alt_text: str = "") -> Dict[str, Any]:
+        """
+        Analyze image content using vision AI.
+        
+        Args:
+            image_input: URL, file path, or base64 data of the image to analyze
+            alt_text: Existing alt text for context
+            
+        Returns:
+            Dictionary with vision analysis results
+        """
+        if not self.enable_vision or not self.vision_processor:
+            return {}
+        
+        try:
+            # Create architectural drawing analysis prompt
+            prompt = f"""Analyze this architectural drawing/image. Provide:
+1. Type of drawing (floor plan, elevation, section, detail, etc.)
+2. Key architectural elements visible
+3. Scale information if visible
+4. Dimensions or measurements shown
+5. Construction details and materials
+6. Any text or annotations visible
+
+Context from alt text: {alt_text}
+
+Focus on technical architectural content that would be relevant for construction and design education."""
+            
+            # Analyze the image
+            analysis = self.vision_processor.analyze_image(
+                image_input=image_input,
+                prompt=prompt
+            )
+            
+            if analysis and analysis.get('success'):
+                return {
+                    'vision_analysis': analysis.get('analysis', ''),
+                    'analysis_provider': analysis.get('provider', ''),
+                    'analysis_timestamp': analysis.get('timestamp', ''),
+                    'drawing_type': self._extract_drawing_type(analysis.get('analysis', '')),
+                    'has_vision_analysis': True
+                }
+            
+        except Exception as e:
+            logger.warning(f"Vision analysis failed: {e}")
+        
+        return {'has_vision_analysis': False}
+    
+    def _extract_drawing_type(self, analysis_text: str) -> str:
+        """Extract drawing type from vision analysis."""
+        text_lower = analysis_text.lower()
+        
+        # Check for drawing type keywords
+        drawing_types = {
+            'floor plan': ['floor plan', 'plan view', 'layout'],
+            'elevation': ['elevation', 'facade', 'front view'],
+            'section': ['section', 'cross section', 'sectional'],
+            'detail': ['detail', 'construction detail', 'close-up'],
+            'site plan': ['site plan', 'site layout', 'topographical'],
+            'perspective': ['perspective', '3d view', 'isometric'],
+            'diagram': ['diagram', 'schematic', 'chart']
+        }
+        
+        for drawing_type, keywords in drawing_types.items():
+            if any(keyword in text_lower for keyword in keywords):
+                return drawing_type
+        
+        return 'unknown'
     
     def resize_image(self, image: Image.Image) -> Image.Image:
         """
@@ -149,6 +237,10 @@ class ContentProcessor:
                     "content_type": "image",
                     "filename": image_path.name
                 }
+                
+                # Analyze image content using vision AI
+                vision_data = self._analyze_image_content(image_path)
+                image_data.update(vision_data)
                 
                 return image_data
                 
@@ -274,7 +366,7 @@ class ContentProcessor:
                 )
                 processed_segments.extend(text_chunks)
                 
-                # Add image references
+                # Add image references with vision analysis
                 for img_url in html_content["image_urls"]:
                     img_segment = {
                         "content_type": "image_reference",
@@ -286,6 +378,11 @@ class ContentProcessor:
                         "page_title": content_item["title"],
                         "url": content_item["url"]
                     }
+                    
+                    # Add vision analysis for the image URL
+                    vision_data = self._analyze_image_content(img_url["src"], img_url["alt"])
+                    img_segment.update(vision_data)
+                    
                     processed_segments.append(img_segment)
             
             elif content_item["type"] == "file":
