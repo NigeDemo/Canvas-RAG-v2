@@ -1,21 +1,24 @@
 # Canvas RAG v2 - Multimodal Architecture Drawing Assistant
 
-An intelligent RAG system that enables architecture students to query Canvas LMS content using natural language, with specialized support for architectural drawing content and enhanced LLM-powered responses.
+An intelligent RAG system that enables architecture students to query Canvas LMS content using natural language, with specialized support for architectural drawing content, section-aware text processing, and enhanced LLM-powered responses.
 
 ## 🎯 Overview
 
 This system provides a natural-language interface to query Canvas LMS pages containing:
 - HTML pages with embedded architectural drawings
-- Text content about construction standards and techniques
+- Text content about construction standards and techniques with **section-aware processing**
 - Image references with intelligent retrieval and description
 - **Vision AI analysis of architectural drawings and technical content**
+- **Structured page content with section heading detection**
 
 ### Key Features
 
 - **Canvas Integration**: Direct integration with Canvas LMS API for content ingestion
+- **Section-Aware Processing**: Automatic detection and separate indexing of page sections and headings
 - **Intelligent Retrieval**: Vector-based search with hybrid retrieval capabilities
 - **LLM-Powered Responses**: Uses GPT-4 for intelligent reasoning and synthesis
 - **Vision AI Analysis**: GPT-4 Vision integration for analyzing architectural drawings
+- **Structure Queries**: Support for "what sections are on this page?" type queries
 - **Image-Aware Queries**: Specialized handling for image-related questions with content analysis
 - **Source Linking**: Provides clickable links back to original Canvas content and images
 - **Interactive Chat**: Streamlit-based chat interface with debug capabilities
@@ -25,23 +28,29 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Canvas API    │───▶│   Data Pipeline  │───▶│   Vector Store  │
-│                 │    │                  │    │   (ChromaDB)    │
+│   Canvas API    │───▶│ Section-Aware    │───▶│   Vector Store  │
+│                 │    │  Data Pipeline   │    │   (ChromaDB)    │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                               │                          │
                               ▼                          ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  Chat Interface │◀───│  RAG Pipeline    │◀───│ Hybrid Retrieval│
-│  (Streamlit)    │    │   (GPT-4)        │    │                 │
+│  (Streamlit)    │    │   (GPT-4)        │    │ + Section Query │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
+                                                        │
+                                                        ▼
+                                              ┌─────────────────┐
+                                              │ Vision AI       │
+                                              │ (GPT-4 Vision)  │
+                                              └─────────────────┘
 ```
 
-## � Repository Statistics
+## 📊 Repository Statistics
 
 - **Language**: Python
 - **Framework**: Streamlit + OpenAI
 - **Database**: ChromaDB  
-- **Status**: Phase 2 Complete ✅
+- **Status**: Phase 2+ Complete (Section-Aware) ✅
 
 ## �🚀 Quick Start
 
@@ -125,7 +134,7 @@ Canvas-RAG-v2/
 │   └── utils/            # Common utilities
 ├── setup/               # Setup and configuration scripts
 ├── scripts/             # Utility scripts
-├── tests/               # Unit and integration tests
+├── tests/               # Limited unit tests and validation scripts
 ├── data/                # Raw and processed data
 ├── docs/               # Documentation
 └── logs/               # Application logs
@@ -150,8 +159,15 @@ Canvas-RAG-v2/
 - ✅ OCR extraction from architectural drawings
 - ✅ Enhanced visual reasoning capabilities
 
+### Phase 2+: Section-Aware Architecture ✅
+- ✅ Automatic section detection from Canvas pages
+- ✅ Section-aware text chunking and indexing
+- ✅ Structure query support ("what sections are on this page?")
+- ✅ Section heading prioritization in retrieval
+- ✅ Enhanced page organization understanding
+
 ### Phase 3: Retrieval Improvements
-- [ ] BM25 sparse retrieval implementation
+- ✅ BM25 sparse retrieval implementation (available)
 - [ ] SPLADE v2 integration
 - [ ] Advanced hybrid fusion
 - [ ] Performance optimization
@@ -169,26 +185,28 @@ Canvas-RAG-v2/
 
 ## ⚠️ Current Limitations & Future Enhancements
 
-### Current State (Phase 2 Complete)
+### Current State (Phase 2+ Complete)
 **What Works:**
 - ✅ Canvas content ingestion and processing
-- ✅ Text-based search and retrieval
+- ✅ Section-aware text processing and chunking
+- ✅ Text-based search and retrieval with section prioritization
 - ✅ Image reference extraction and linking
 - ✅ GPT-4 powered intelligent responses
 - ✅ Interactive chat interface
 - ✅ **Vision AI Analysis**: GPT-4 Vision integration for architectural drawing analysis
 - ✅ **OCR Capabilities**: Text extraction from architectural drawings
 - ✅ **Enhanced Visual Reasoning**: Detailed analysis of electrical plans, elevations, and technical drawings
+- ✅ **Section Structure Queries**: Support for "what sections are on this page?" queries
 
 **Current Limitations:**
-- ⚠️ **BM25 Not Active**: Sparse retrieval shows warnings (vector search only)
+- ✅ **BM25 Active**: Sparse retrieval implemented and functional
 - ⚠️ **Vision Analysis Caching**: Could be optimized for better performance
 
 ### Next Priority Enhancements (Phase 3)
-1. **BM25 Integration**: Implement and fix sparse retrieval for enhanced search
+1. **Advanced Hybrid Fusion**: Improve retrieval ranking and fusion algorithms
 2. **Vision Analysis Caching**: Optimize vision AI calls with intelligent caching
-3. **Advanced Hybrid Fusion**: Improve retrieval ranking and fusion algorithms
-4. **Performance Optimization**: Enhance response times and resource usage
+3. **Performance Optimization**: Enhance response times and resource usage
+4. **Embedding Model Optimization**: Address quota management and alternative models
 
 ## 📋 **For New Contributors/Agents**
 
@@ -196,21 +214,53 @@ Canvas-RAG-v2/
 
 **Key Files**: `src/ui/chat_app.py` (interface), `src/ui/vision_chat_app.py` (vision-enhanced interface), `src/indexing/vector_store.py` (retrieval), `src/vision/vision_rag_integration.py` (vision AI), `scripts/run_pipeline.py` (ingestion)
 
-**Test It**: Set up `.env` file → Run pipeline → Start Streamlit app → Ask "Can you describe the electrical plan?" for vision AI demo 
+**Test It**: Set up `.env` file → Run `python scripts/validate_setup.py` → Run pipeline → Start Streamlit app → Ask "Can you describe the electrical plan?" for vision AI demo 
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing & Validation
 
+### System Validation
 ```bash
-# Run all tests
-pytest
-
-# Run specific test categories
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/retrieval/
+# Validate system configuration and setup
+python scripts/validate_setup.py
 ```
+
+### Unit Tests (Limited Coverage)
+```bash
+# Run the available unit tests
+pytest tests/
+
+# Specific test files:
+pytest tests/test_processing.py      # Content processing unit tests
+pytest tests/test_vision_config.py  # Vision AI configuration check
+pytest tests/test_vision_ai.py      # Vision AI integration test
+pytest tests/test_image_processing.py # Image processing validation
+```
+
+### Manual Testing
+```bash
+# Test the complete system end-to-end
+# 1. Set up environment
+cp .env.template .env
+# Add your API keys to .env
+
+# 2. Validate setup
+python scripts/validate_setup.py
+
+# 3. Ingest content
+python scripts/run_pipeline.py --course-id YOUR_COURSE_ID
+
+# 4. Test vision AI
+streamlit run src/ui/vision_chat_app.py
+# Ask: "Can you describe the electrical plan?"
+```
+
+**Testing Notes**: 
+- Limited unit test coverage - mostly configuration validation
+- No comprehensive test suite for regression testing
+- Manual end-to-end testing recommended for validation
+- Future development should prioritize adding proper unit tests
 
 ## 📊 Evaluation
 
@@ -224,8 +274,12 @@ The system includes comprehensive evaluation metrics:
 
 1. Fork the repository
 2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
+3. Add functionality with proper error handling
+4. **Add unit tests** (current coverage is limited - help needed!)
+5. Update documentation as needed
+6. Submit a pull request
+
+**Note**: The project currently has limited unit test coverage. Contributing proper unit tests with mocking and isolation would be highly valuable!
 
 ## 📄 License
 

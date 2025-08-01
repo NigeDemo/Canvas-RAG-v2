@@ -95,6 +95,10 @@ simple_*.py
 temp_*.py
 *_debug.py
 *_temp.py
+test_electrical_*.py
+test_database_*.py
+test_index_*.py
+test_fixes.py
 *.tmp
 *.log
 test_changes.txt

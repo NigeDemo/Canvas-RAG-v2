@@ -4,26 +4,52 @@
 
 **Project**: Canvas RAG v2 - Architecture course content assistant  
 **Domain**: Architecture education, technical drawing analysis  
-**Current Status**: Phase 2 complete (vision AI integration fully implemented)  
-**Next Priority**: Performance optimization and BM25 integration (Phase 3)  
-**Tech Stack**: Canvas API → Python → OpenAI (embeddings + GPT-4 + Vision) → ChromaDB → Streamlit  
+**Current Status**: Phase 2+ complete (vision AI + section-aware architecture implemented)  
+**Next Priority**: Performance optimization and embedding model resolution (Phase 3)  
+**Tech Stack**: Canvas API → Python → Section Detection → OpenAI (embeddings + GPT-4 + Vision) → ChromaDB → Streamlit  
 
 ---
 
-## Current Architecture (Phase 2 Complete)
+## Current Architecture (Phase 2+ Complete)
 
 ### Data Flow
 1. **Canvas Ingestion**: Extract HTML pages and image references
-2. **Content Processing**: Parse HTML, extract text and image URLs
-3. **Vectorization**: Create embeddings using OpenAI text-embedding-3-large
-4. **Storage**: Store in ChromaDB with metadata
-5. **Retrieval**: Vector similarity search with image reference filtering
-6. **Vision AI Integration**: GPT-4 Vision analysis for architectural drawings
-7. **Generation**: GPT-4 synthesis with intelligent prompting and vision analysis
+2. **Section-Aware Processing**: Detect page sections and headings automatically
+3. **Content Processing**: Parse HTML, extract text with section structure preserved
+4. **Section-Based Chunking**: Create separate chunks for headings and content
+5. **Vectorization**: Create embeddings using OpenAI text-embedding-3-large
+6. **Storage**: Store in ChromaDB with section metadata
+7. **Enhanced Retrieval**: Vector similarity search with section prioritization
+8. **Vision AI Integration**: GPT-4 Vision analysis for architectural drawings
+9. **Generation**: GPT-4 synthesis with intelligent prompting and vision analysis
 
 ### What Gets Indexed
 
-#### Text Chunks
+#### Section Heading Chunks (NEW)
+```json
+{
+  "content_type": "section_heading",
+  "text": "Why do we produce a 'Technical', 'Working', or' Construction' Drawing Pack?",
+  "section_index": 0,
+  "is_section_heading": true,
+  "source_id": 1440959,
+  "title": "construction drawing package"
+}
+```
+
+#### Section Content Chunks (NEW)
+```json
+{
+  "content_type": "section_content",
+  "text": "Architects and Architectural Technologists produce these drawings...",
+  "section_index": 0,
+  "chunk_index": 0,
+  "source_id": 1440959,
+  "title": "construction drawing package"
+}
+```
+
+#### Text Chunks (Legacy Support)
 ```json
 {
   "content_type": "text_chunk",
@@ -47,6 +73,12 @@
 ```
 
 ### Query Processing
+
+#### Section Structure Queries (NEW)
+- **Detection**: `is_section_heading_query()` identifies structure-related queries
+- **Query Patterns**: "what sections", "what headings", "page structure", "section titles"
+- **Retrieval**: Section heading chunks prioritized in results
+- **Response**: Lists detected section headings and page organization
 
 #### Image Query Detection
 ```python

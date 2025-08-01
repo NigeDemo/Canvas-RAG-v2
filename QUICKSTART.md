@@ -4,32 +4,95 @@
 
 ### Understanding the Project in 5 Minutes
 
-1. **What it does**: Lets architecture students ask natural language questions about Canvas course content
-2. **How it works**: Downloads Canvas pages → Extracts text & image refs → Stores in vector DB → GPT-4 + Vision AI answers questions
-3. **Current state**: Phase 2 complete - works well for text AND can analyze architectural drawings visually
-4. **Next goal**: Performance optimization and BM25 integration (Phase 3)
+1. **What it does**: Lets architecture students ask natural language questions about Canvas course content with support for page structure queries
+2. **How it works**: Downloads Canvas pages → Section-aware text processing → Extracts text & image refs → Stores in vector DB → GPT-4 + Vision AI answers questions
+3. **Current state**: Phase 2+ complete - works well for text AND can analyze architectural drawings visually AND understands page structure
+4. **Next goal**: Performance optimization and embedding model resolution (Phase 3)
 
 ### Key Files to Understand
 
 ```
 src/ui/vision_chat_app.py    # Vision-enhanced Streamlit interface
 src/vision/vision_rag_integration.py # Vision AI integration
-src/indexing/vector_store.py # ChromaDB operations & retrieval
-src/processing/content_processor.py # Canvas content processing
-scripts/run_pipeline.py     # End-to-end pipeline
+src/indexing/vector_store.py # ChromaDB operations & section-aware retrieval
+src/processing/content_processor.py # Section-aware Canvas content processing
+scripts/run_pipeline.py     # End-to-end pipeline with section detection
 ```
 
 ### Current Data Flow
 ```
-Canvas HTML → BeautifulSoup → Text chunks + Image URLs → OpenAI embeddings → ChromaDB → Vector search → Vision AI analysis → GPT-4 synthesis
+Canvas HTML → Section Detection → Section-aware chunking → Text chunks + Image URLs → OpenAI embeddings → ChromaDB → Vector search + Section prioritization → Vision AI analysis → GPT-4 synthesis
 ```
 
+### Recent Major Update (August 2025)
+- ✅ **Section-Aware Architecture**: System now detects and separately indexes page section headings
+- ✅ **Structure Queries**: Supports "what sections are on this page?" queries
+- ✅ **Enhanced Retrieval**: Section headings prioritized for structure-related queries
+- ✅ **Section Query Bug Fix**: Fixed section heading retrieval prioritization (Aug 1, 2025)
+- ✅ **OpenAI Integration**: Fully functional with rate limiting protection
+
 ### Running the System
+
+**First-time setup:**
 ```bash
-1. Copy .env.template to .env (add your API keys)
-2. python scripts/run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
-3. streamlit run src/ui/vision_chat_app.py
+# 1. Activate virtual environment (if you have one)
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # macOS/Linux
+
+# 2. Install dependencies
+pip install -e .
+
+# 3. Copy .env.template to .env and add your API keys
+copy .env.template .env  # Windows
+# cp .env.template .env  # macOS/Linux
+
+# 4. Validate your setup
+python scripts\validate_setup.py
 ```
+
+**Run the pipeline (with section-aware processing):**
+```bash
+# For single page with section detection (recommended)
+python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --page-url construction-drawing-package-2
+
+# For full course ingestion (when OpenAI quota available)
+python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --embedding-model openai
+
+# For single page ingestion (with OpenAI embeddings)
+python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug --embedding-model openai
+```
+
+**⚠️ If you have database issues:**
+```bash
+# Clear the database and restart with OpenAI embeddings
+rm -rf data/chroma_db/*  # macOS/Linux
+# rmdir /s data\chroma_db  # Windows (use with caution)
+
+# Then re-run pipeline
+python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug --embedding-model openai
+```
+
+**Start the chat interface:**
+```bash
+# Vision-enhanced interface (recommended)
+streamlit run src\ui\vision_chat_app.py
+# OR use: .venv\Scripts\python.exe -m streamlit run src\ui\vision_chat_app.py
+
+# Basic interface (fallback)
+streamlit run src\ui\chat_app.py
+```
+
+**⚠️ Important Note:**
+Before asking questions, you need to run the pipeline to ingest Canvas content:
+```bash
+python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
+```
+
+**VS Code Users:**
+You can also use the pre-configured tasks:
+- `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Vision Chat App"
+- `Ctrl+Shift+P` → "Tasks: Run Task" → "Install Dependencies"
+- `Ctrl+Shift+P` → "Tasks: Run Task" → "Setup Vision AI"
 
 ### Current Capabilities ✅
 1. **Text-based queries** - Full semantic search

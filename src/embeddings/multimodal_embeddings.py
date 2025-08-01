@@ -139,7 +139,7 @@ class OpenAIEmbedModel(EmbeddingModel):
     
     def embed_text(self, texts: List[str]) -> np.ndarray:
         """
-        Embed text using OpenAI API.
+        Embed text using OpenAI API with rate limiting and retry logic.
         
         Args:
             texts: List of text strings to embed
@@ -147,18 +147,44 @@ class OpenAIEmbedModel(EmbeddingModel):
         Returns:
             Numpy array of embeddings
         """
-        try:
-            response = self.client.embeddings.create(
-                model=self.model_name,
-                input=texts
-            )
-            
-            embeddings = [data.embedding for data in response.data]
-            return np.array(embeddings)
-            
-        except Exception as e:
-            logger.error(f"Error getting OpenAI embeddings: {e}")
-            return np.array([])
+        import time
+        import random
+        
+        max_retries = 3
+        base_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                # Add a small delay before each request to avoid rate limiting
+                if attempt > 0:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    logger.info(f"Retrying embedding request in {delay:.2f} seconds (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                
+                response = self.client.embeddings.create(
+                    model=self.model_name,
+                    input=texts
+                )
+                
+                embeddings = [data.embedding for data in response.data]
+                return np.array(embeddings)
+                
+            except Exception as e:
+                logger.error(f"Error getting OpenAI embeddings (attempt {attempt + 1}): {e}")
+                
+                # Check if it's a rate limit or quota error
+                if "429" in str(e) and attempt < max_retries - 1:
+                    # Rate limit - retry with exponential backoff
+                    continue
+                elif "insufficient_quota" in str(e):
+                    # Quota exceeded - don't retry
+                    logger.error("OpenAI quota exceeded. Consider using a different embedding model with --embedding-model nomic")
+                    return np.array([])
+                elif attempt == max_retries - 1:
+                    # Final attempt failed
+                    return np.array([])
+                    
+        return np.array([])
     
     def embed_multimodal(self, content: List[Dict[str, Any]]) -> np.ndarray:
         """

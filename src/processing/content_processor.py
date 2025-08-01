@@ -301,7 +301,7 @@ Focus on technical architectural content that would be relevant for construction
     
     def chunk_text(self, text: str, metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
-        Split text into chunks for embedding.
+        Split text into chunks with section-aware processing.
         
         Args:
             text: Text to chunk
@@ -313,6 +313,185 @@ Focus on technical architectural content that would be relevant for construction
         if not text.strip():
             return []
         
+        # Try section-aware chunking first
+        sections = self._extract_sections(text)
+        if sections:
+            return self._chunk_by_sections(sections, metadata)
+        
+        # Fall back to word-based chunking
+        return self._chunk_by_words(text, metadata)
+    
+    def _extract_sections(self, text: str) -> List[Dict[str, str]]:
+        """
+        Extract sections from text based on question headings.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            List of sections with headings and content
+        """
+        # Known section headings from Canvas content
+        known_headings = [
+            "Why do we produce a 'Technical', 'Working', or' Construction' Drawing Pack?",
+            "Who is responsible for the Technical Drawing Pack?",
+            "When do we produce a Technical Drawing Pack?",
+            "What is in an Architectural 'Technical', 'Working', or' Construction' Drawing Pack?",
+            "Drawing Standards and Construction 'Rules of Thumb'"
+        ]
+        
+        # Alternative patterns for section detection
+        question_patterns = [
+            r'Why\s+do\s+we\s+produce.*?Drawing\s+Pack\?',
+            r'Who\s+is\s+responsible.*?Drawing\s+Pack\?',
+            r'When\s+do\s+we\s+produce.*?Drawing\s+Pack\?',
+            r'What\s+is\s+in.*?Drawing\s+Pack\?',
+            r'Drawing\s+Standards\s+and\s+Construction'
+        ]
+        
+        sections = []
+        remaining_text = text
+        
+        # Try to find sections using known headings first
+        for heading in known_headings:
+            pos = remaining_text.find(heading)
+            if pos >= 0:
+                # Find the end of this section (start of next heading or end of text)
+                section_start = pos
+                section_end = len(remaining_text)
+                
+                # Look for the next heading
+                for next_heading in known_headings:
+                    if next_heading != heading:
+                        next_pos = remaining_text.find(next_heading, pos + len(heading))
+                        if next_pos >= 0 and next_pos < section_end:
+                            section_end = next_pos
+                
+                # Extract section content
+                section_text = remaining_text[section_start:section_end]
+                
+                # Split heading from content
+                content_start = len(heading)
+                content = section_text[content_start:].strip()
+                
+                # Remove duplicate heading if it appears again at start of content
+                if content.startswith(heading):
+                    content = content[len(heading):].strip()
+                
+                sections.append({
+                    'heading': heading,
+                    'content': content
+                })
+        
+        # If no known headings found, try pattern matching
+        if not sections:
+            for pattern in question_patterns:
+                matches = list(re.finditer(pattern, text, re.IGNORECASE))
+                for match in matches:
+                    heading_start = match.start()
+                    heading_end = match.end()
+                    
+                    # Find end of this section
+                    section_end = len(text)
+                    for other_pattern in question_patterns:
+                        if other_pattern != pattern:
+                            next_matches = list(re.finditer(other_pattern, text[heading_end:], re.IGNORECASE))
+                            if next_matches:
+                                section_end = heading_end + next_matches[0].start()
+                                break
+                    
+                    heading = text[heading_start:heading_end]
+                    content = text[heading_end:section_end].strip()
+                    
+                    sections.append({
+                        'heading': heading,
+                        'content': content
+                    })
+        
+        # Sort sections by their position in the text
+        if sections:
+            sections.sort(key=lambda s: text.find(s['heading']))
+            logger.info(f"Extracted {len(sections)} sections from text")
+            return sections
+        
+        return []
+    
+    def _chunk_by_sections(self, sections: List[Dict[str, str]], metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """
+        Create chunks based on sections.
+        
+        Args:
+            sections: List of sections with headings and content
+            metadata: Additional metadata to include
+            
+        Returns:
+            List of section-based chunks
+        """
+        chunks = []
+        
+        for i, section in enumerate(sections):
+            heading = section['heading']
+            content = section['content']
+            
+            # Create a chunk for the section heading itself
+            heading_chunk = {
+                "text": heading,
+                "chunk_index": len(chunks),
+                "section_index": i,
+                "content_type": "section_heading",
+                "is_section_heading": True
+            }
+            
+            if metadata:
+                heading_chunk.update(metadata)
+            
+            chunks.append(heading_chunk)
+            
+            # Create chunks for the section content
+            if content:
+                # If content is short enough, keep it as one chunk
+                content_words = content.split()
+                if len(content_words) <= self.chunk_size:
+                    content_chunk = {
+                        "text": f"{heading}\n\n{content}",
+                        "chunk_index": len(chunks),
+                        "section_index": i,
+                        "section_heading": heading,
+                        "content_type": "section_content"
+                    }
+                    
+                    if metadata:
+                        content_chunk.update(metadata)
+                    
+                    chunks.append(content_chunk)
+                else:
+                    # Split long content into sub-chunks but preserve section context
+                    content_sub_chunks = self._chunk_by_words(content, metadata)
+                    for j, sub_chunk in enumerate(content_sub_chunks):
+                        sub_chunk.update({
+                            "chunk_index": len(chunks),
+                            "section_index": i,
+                            "section_heading": heading,
+                            "content_type": "section_content",
+                            "sub_chunk_index": j,
+                            "text": f"{heading}\n\n{sub_chunk['text']}"  # Include heading for context
+                        })
+                        chunks.append(sub_chunk)
+        
+        logger.info(f"Created {len(chunks)} section-aware chunks from {len(sections)} sections")
+        return chunks
+    
+    def _chunk_by_words(self, text: str, metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+        """
+        Traditional word-based chunking (fallback method).
+        
+        Args:
+            text: Text to chunk
+            metadata: Additional metadata to include
+            
+        Returns:
+            List of word-based chunks
+        """
         chunks = []
         words = text.split()
         

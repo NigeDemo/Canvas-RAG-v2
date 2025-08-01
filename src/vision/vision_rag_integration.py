@@ -92,9 +92,15 @@ class VisionEnhancedRAG:
                 text_context = ""
                 image_references = []
             
-            # Create enhanced context with vision analysis
-            if enable_vision and (is_visual_query or image_references):
-                logger.info(f"Using vision-enhanced response: enable_vision={enable_vision}, is_visual_query={is_visual_query}, image_references={len(image_references)}")
+            # Create enhanced context with vision analysis  
+            # Only use vision for explicitly visual queries - be more conservative
+            explicit_visual_keywords = ['image', 'drawing', 'figure', 'visual', 'analyze', 'examine', 'look at', 'show me', 'what does', 'identify', 'describe the drawing', 'analyze the image']
+            has_explicit_visual_intent = any(keyword in query.lower() for keyword in explicit_visual_keywords)
+            
+            use_vision = enable_vision and (is_visual_query or has_explicit_visual_intent)
+            
+            if use_vision:
+                logger.info(f"Using vision-enhanced response: is_visual_query={is_visual_query}, explicit_visual_intent={has_explicit_visual_intent}")
                 enhanced_context = self.response_generator.create_vision_enhanced_context(
                     text_context, image_references, query, query_type
                 )
@@ -108,7 +114,7 @@ class VisionEnhancedRAG:
                 
             else:
                 # Fall back to text-only response
-                logger.info(f"Using text-only response generation: enable_vision={enable_vision}, is_visual_query={is_visual_query}, image_references={len(image_references)}")
+                logger.info(f"Using text-only response: query='{query}', is_visual={is_visual_query}, explicit_visual={has_explicit_visual_intent}")
                 response = self._generate_text_only_response(query, text_context, image_references)
                 vision_analyses = []
             
@@ -210,7 +216,7 @@ class VisionEnhancedRAG:
                 image_refs.append({
                     'image_url': metadata.get('image_url', ''),
                     'alt_text': alt_text,
-                    'page_title': metadata.get('page_title', ''),
+                    'page_title': metadata.get('title', metadata.get('page_title', '')),
                     'source_url': metadata.get('url', ''),
                     'vision_analysis': vision_analysis,
                     'content_type': content_type

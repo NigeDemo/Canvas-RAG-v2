@@ -214,24 +214,125 @@ class HybridRetriever:
         """Detect if query is requesting image/visual content."""
         query_lower = query.lower()
         
-        # Check for image-related keywords
-        for keyword in self.image_keywords:
-            if keyword in query_lower:
+        # More conservative image detection - require explicit visual intent
+        explicit_visual_keywords = [
+            'show me the image', 'show me the drawing', 'show me the plan',
+            'describe the image', 'describe the drawing', 'describe the plan',
+            'analyze the image', 'analyze the drawing', 'analyze the plan',
+            'examine the image', 'examine the drawing', 'examine the plan',
+            'what does the image', 'what does the drawing', 'what does the plan',
+            'identify in the image', 'identify in the drawing', 'identify in the plan',
+            'look at the image', 'look at the drawing', 'look at the plan',
+            'what can you see', 'what is visible', 'what appears in'
+        ]
+        
+        # Check for explicit visual phrases first
+        for phrase in explicit_visual_keywords:
+            if phrase in query_lower:
                 return True
-                
-        # Check for visual analysis patterns
+        
+        # Check for visual analysis patterns only when combined with explicit visual request
         visual_patterns = [
-            r'\b(what|how|where|which).*(show|display|appear|look|visible)',
-            r'\b(describe|analyze|examine|identify).*(image|drawing|plan|diagram)',
-            r'\b(electrical|floor|site|construction).*(plan|drawing|diagram)',
-            r'\bcan you (see|find|identify|describe)',
-            r'\bshow me.*'
+            r'\b(show|display).*(image|drawing|plan|diagram)',
+            r'\b(describe|analyze|examine|identify).*(this|the).*(image|drawing|plan|diagram)',
+            r'\bcan you (see|find|identify|describe).*(image|drawing|plan|diagram)',
+            r'\bwhat.*(visible|appears|shown).*(image|drawing|plan|diagram)',
         ]
         
         for pattern in visual_patterns:
             if re.search(pattern, query_lower):
                 return True
+        
+        # Don't trigger on general questions about topics, purposes, or overviews        
+        general_question_patterns = [
+            r'\bwhat.*topics.*covered',
+            r'\bwhat.*purpose.*page',
+            r'\bwhat.*about.*page',
+            r'\boverview.*of',
+            r'\bsummary.*of',
+            r'\btopics.*discussed',
+            r'\bwhat.*includes',
+            r'\bwhat.*contains'
+        ]
+        
+        for pattern in general_question_patterns:
+            if re.search(pattern, query_lower):
+                return False
                 
+        return False
+    
+    def is_section_heading_query(self, query: str) -> bool:
+        """Detect if query is asking about section headings or page structure."""
+        query_lower = query.lower()
+        
+        # Patterns that indicate requests for section structure
+        section_heading_patterns = [
+            r'\bwhat.*sections.*on.*page',
+            r'\bwhat.*sections.*covered',
+            r'\bwhat.*topics.*covered',
+            r'\bwhat.*headings.*on.*page',
+            r'\bwhat.*headings.*in.*document',
+            r'\blist.*sections',
+            r'\blist.*headings',
+            r'\btitles.*sections',
+            r'\bsection.*titles',
+            r'\bpage.*structure',
+            r'\bdocument.*structure',
+            r'\bmain.*topics.*discussed',
+            r'\bmain.*sections.*in',
+            r'\boverview.*topics',
+            r'\btable.*contents',
+            r'\bwhat.*organized.*into',
+            r'\bhow.*organized',
+            r'\bwhat.*parts.*include',
+            r'\bwhat.*divided.*into'
+        ]
+        
+        for pattern in section_heading_patterns:
+            if re.search(pattern, query_lower):
+                return True
+        
+        # Also check for direct title-related queries
+        title_patterns = [
+            r'\btitle.*page',
+            r'\bpage.*title',
+            r'\bname.*page',
+            r'\bwhat.*called',
+            r'\bwhat.*page.*about'
+        ]
+        
+        for pattern in title_patterns:
+            if re.search(pattern, query_lower):
+                return True
+                
+        return False
+    
+    def _looks_like_section_heading(self, text: str) -> bool:
+        """Check if text looks like a section heading."""
+        if not text or len(text) > 300:  # Too long to be a heading
+            return False
+        
+        text_clean = text.strip()
+        
+        # Check for question patterns (common in our content)
+        if re.match(r'^.{10,200}\?$', text_clean):
+            return True
+        
+        # Check for title-case patterns
+        if re.match(r'^[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s*$', text_clean):
+            return True
+        
+        # Check for heading patterns in content
+        lines = text_clean.split('\n')
+        first_line = lines[0].strip() if lines else ""
+        
+        # First line looks like a heading
+        if (first_line and 
+            len(first_line) < 200 and 
+            (first_line.endswith('?') or 
+             re.match(r'^[A-Z].*[a-z]$', first_line))):
+            return True
+        
         return False
     
     def boost_image_results(self, results: List[Tuple[int, float]], query: str, 
@@ -343,6 +444,65 @@ class HybridRetriever:
         try:
             # Check if this is an image query
             is_image_query = self.is_image_query(query)
+            
+            # Check if this is a section heading query
+            is_section_query = self.is_section_heading_query(query)
+            
+            # Handle section heading queries specially
+            if is_section_query:
+                logger.info(f"Section heading query detected, prioritizing section headings")
+                
+                # For section queries, get ALL section headings first, then add other content
+                all_collection_results = self.vector_store.collection.get()
+                
+                final_results = []
+                section_headings = []
+                
+                # First, collect all section headings directly from the collection
+                for i, metadata in enumerate(all_collection_results['metadatas']):
+                    if (metadata.get('content_type') == 'section_heading' or 
+                        metadata.get('is_section_heading', False)):
+                        
+                        section_headings.append({
+                            "id": all_collection_results['ids'][i],
+                            "text": all_collection_results['documents'][i],
+                            "score": 1.0,  # Give high score to section headings
+                            "rank": len(section_headings) + 1,
+                            "metadata": metadata
+                        })
+                
+                # Add all section headings first
+                final_results.extend(section_headings)
+                
+                # If we need more results, get additional content via vector search
+                if len(final_results) < n_results:
+                    query_embedding = self.embedding_manager.embed_query(query)
+                    additional_results = self.vector_store.query(
+                        query_embedding, 
+                        n_results - len(final_results)
+                    )
+                    
+                    # Add non-heading results
+                    if additional_results.get("ids") and additional_results["ids"][0]:
+                        for i in range(len(additional_results["ids"][0])):
+                            doc_id = additional_results["ids"][0][i]
+                            doc_text = additional_results["documents"][0][i]
+                            metadata = additional_results["metadatas"][0][i]
+                            
+                            # Skip if it's already a section heading we added
+                            if not (metadata.get('content_type') == 'section_heading' or 
+                                   metadata.get('is_section_heading', False)):
+                                
+                                final_results.append({
+                                    "id": doc_id,
+                                    "text": doc_text,
+                                    "score": 1.0 - additional_results["distances"][0][i],
+                                    "rank": len(final_results) + 1,
+                                    "metadata": metadata
+                                })
+                
+                logger.info(f"Section query results: {len(section_headings)} headings, {len(final_results) - len(section_headings)} other content")
+                return final_results[:n_results]
             
             # For image queries, use a two-stage approach:
             # 1. First get image results using the actual query
@@ -507,6 +667,9 @@ class IndexBuilder:
         self.sparse_index = SparseIndex()
         self.embedding_manager = EmbeddingManager(model_type=embedding_model_type)
         
+        # Auto-populate sparse index from existing ChromaDB content
+        self._populate_sparse_index_from_existing()
+        
         self.retriever = HybridRetriever(
             self.vector_store,
             self.sparse_index,
@@ -515,6 +678,35 @@ class IndexBuilder:
         )
         
         logger.info("Initialized index builder")
+    
+    def _populate_sparse_index_from_existing(self):
+        """Populate sparse index from existing ChromaDB content."""
+        try:
+            collection = self.vector_store.client.get_collection(name=self.vector_store.collection_name)
+            all_docs = collection.get()
+            
+            # Filter for text content only
+            text_documents = []
+            text_metadata = []
+            
+            for doc, metadata in zip(all_docs['documents'], all_docs['metadatas']):
+                content_type = metadata.get('content_type', '')
+                if content_type == 'text_chunk' and doc and len(doc.strip()) > 0:
+                    text_documents.append(doc)
+                    text_metadata.append(metadata)
+            
+            if text_documents:
+                self.sparse_index.add_documents(text_documents, text_metadata)
+                logger.info(f"Auto-populated sparse index with {len(text_documents)} text documents")
+            else:
+                logger.warning("No text documents found to populate sparse index")
+                
+        except Exception as e:
+            logger.warning(f"Could not auto-populate sparse index: {e}")
+    
+    def get_retriever(self):
+        """Get the hybrid retriever."""
+        return self.retriever
     
     def build_index(self, processed_content_path: Path) -> None:
         """
