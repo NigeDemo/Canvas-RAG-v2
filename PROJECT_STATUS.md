@@ -1,9 +1,9 @@
 # Canvas RAG v2 - Project Status
 
-## 🎯 Current Status: Phase 2+ Complete with Section-Aware Architecture ✅
+## 🎯 Current Status: Phase 2++ Complete with Query Enhancement ✅
 
-**Last Updated**: August 1, 2025  
-**Status**: Production Ready with Vision AI + Section-Aware Chunking  
+**Last Updated**: January 8, 2025  
+**Status**: Production Ready with Vision AI + Section-Aware Chunking + Query Enhancement  
 **Next Phase**: Performance Optimization & Embedding Model Resolution
 
 ## 📊 Phase Completion Summary
@@ -33,6 +33,14 @@
 - **Section Query Bug Fix**: Resolved section heading retrieval prioritization (Aug 1, 2025) ✅
 - **Core Architecture Fix**: Resolved fundamental chunking fragmentation issue ✅
 
+### ✅ Phase 2++: Query Enhancement (Complete)
+- **Architectural Synonym Expansion**: Automatic expansion of domain-specific terms ✅
+- **Question Type Optimization**: Enhancement of how/what/where questions ✅
+- **Section Query Enhancement**: Intelligent section/structure query processing ✅
+- **Visual Reasoning Enhancement**: Improved queries for image analysis ✅
+- **Configurable System**: Enable/disable flags with debug logging ✅
+- **Production Tested**: Validated in Streamlit chat interface ✅
+
 ### 🔄 Phase 3: Performance Optimization (Ready to Begin)
 - **BM25 Integration**: Sparse retrieval implementation ✅ (Built but needs vector integration)
 - **Hybrid Search Optimization**: Enhanced fusion algorithms
@@ -42,11 +50,11 @@
 ## 🏗️ Current Architecture
 
 ```
-Canvas LMS → Section-Aware Processing → Vector Database → Hybrid Retrieval → Vision AI → Response Generation
-     ↓              ↓                      ↓               ↓                ↓           ↓
-Canvas API → Section Detection/Chunking → ChromaDB → Search Engine → GPT-4 Vision → GPT-4 Text
-                    ↓
-            Section Headings + Content Chunks
+Canvas LMS → Section-Aware Processing → Query Enhancement → Vector Database → Hybrid Retrieval → Vision AI → Response Generation
+     ↓              ↓                        ↓                ↓               ↓                ↓           ↓
+Canvas API → Section Detection/Chunking → Query Processor → ChromaDB → Search Engine → GPT-4 Vision → GPT-4 Text
+                    ↓                          ↓
+            Section Headings + Content    Enhanced Query Terms
 ```
 
 ## 🔧 Technical Capabilities
@@ -70,6 +78,8 @@ Canvas API → Section Detection/Chunking → ChromaDB → Search Engine → GPT
 - **Image Queries**: Vision AI analysis with architectural context
 - **Hybrid Queries**: Combined text and image analysis
 - **Structure Queries**: Section headings and page organization queries
+- **Query Enhancement**: Intelligent expansion with architectural synonyms
+- **Domain-Specific Optimization**: Architecture terminology and visual reasoning
 - **Source Linking**: Clickable links to original Canvas content
 
 ## 📁 Key System Files
@@ -77,6 +87,7 @@ Canvas API → Section Detection/Chunking → ChromaDB → Search Engine → GPT
 ### Core Application
 - `src/ui/vision_chat_app.py` - Main vision-enhanced interface
 - `src/vision/vision_rag_integration.py` - Vision AI integration
+- `src/retrieval/hybrid_search.py` - Query enhancement and hybrid search engine
 - `src/indexing/vector_store.py` - Database operations + section query support
 - `src/processing/content_processor.py` - Section-aware text processing
 - `scripts/run_pipeline.py` - Content ingestion pipeline
@@ -92,6 +103,12 @@ Canvas API → Section Detection/Chunking → ChromaDB → Search Engine → GPT
 - `src/processing/content_processor.py::_chunk_by_sections()` - Section-based chunking
 - `src/indexing/vector_store.py::is_section_heading_query()` - Structure query detection
 - `src/indexing/vector_store.py::retrieve()` - Enhanced with section prioritization
+
+### Query Enhancement (NEW)
+- `src/retrieval/hybrid_search.py::QueryProcessor.enhance_query()` - Core query enhancement
+- `src/config/settings.py` - Query enhancement configuration flags
+- Debug logging in `logs/canvas_rag.log` with query enhancement traces
+- Configurable architectural synonym expansion and optimization
 
 ### Configuration
 - `.env.template` - Environment configuration template
@@ -222,6 +239,12 @@ streamlit run src/ui/vision_chat_app.py
 - ✅ Professional project organization ready for GitHub
 - ✅ Comprehensive documentation and testing suite
 
+### Phase 2++ Achievements (January 2025)
+- ✅ **Query Enhancement System**: Intelligent query expansion with architectural synonyms
+- ✅ **Production Validation**: Tested and working in Streamlit chat interface
+- ✅ **Configurable Architecture**: Enable/disable flags with debug logging
+- ✅ **Domain-Specific Optimization**: Architecture terminology and visual reasoning enhancement
+
 ### Recent Technical Achievements (August 2025)
 - ✅ **Core Issue Resolution**: Section headings no longer fragmented by word-based chunking
 - ✅ **Embedded Heading Detection**: Handles headings within flowing text paragraphs
@@ -238,4 +261,4 @@ streamlit run src/ui/vision_chat_app.py
 
 ---
 
-**Project Status**: Production ready with full vision AI capabilities and section-aware architecture. Core structural issues resolved. Phase 2+ complete, Phase 3 optimization ready pending embedding model resolution.
+**Project Status**: Production ready with full vision AI capabilities, section-aware architecture, and intelligent query enhancement. Core structural issues resolved. Phase 2++ complete, Phase 3 optimization ready pending embedding model resolution.

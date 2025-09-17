@@ -1,9 +1,9 @@
 <!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
 
-# Canvas RAG v2 - Vision AI Integration + Section-Aware Architecture
+# Canvas RAG v2 - Vision AI Integration + Section-Aware Architecture + Query Enhancement
 
 ## Project Context
-This is a Canvas RAG v2 system for architecture education that combines text and image content from Canvas LMS. The system is currently in Phase 2+ completion, with vision AI capabilities and section-aware text processing fully implemented and production-ready.
+This is a Canvas RAG v2 system for architecture education that combines text and image content from Canvas LMS. The system is currently in Phase 2++ completion, with vision AI capabilities, section-aware text processing, and intelligent query enhancement fully implemented and production-ready.
 
 ## Key Technical Details
 
@@ -19,6 +19,7 @@ This is a Canvas RAG v2 system for architecture education that combines text and
 - **Phase 1 Complete**: Text indexing, basic image filename matching
 - **Phase 2 Complete**: Vision AI integration for content analysis
 - **Phase 2+ Complete**: Section-aware architecture with heading detection and retrieval bug fixes
+- **Phase 2++ Complete**: Intelligent query enhancement with architectural synonyms and optimization
 - **Repository Clean**: Production-ready codebase with cleaned temporary scripts (Aug 1, 2025)
 - **Phase 3 Ready**: Performance optimization and embedding model resolution
 
@@ -44,6 +45,14 @@ This is a Canvas RAG v2 system for architecture education that combines text and
 - ✅ Section heading prioritization in retrieval results (bug fixed Aug 1, 2025)
 - ✅ Enhanced page organization understanding
 
+### Query Enhancement Features (Phase 2++ Complete)
+- ✅ Architectural synonym expansion (floor plan → layout, site plan, building plan)
+- ✅ Question type optimization (how → method, technique, procedure)
+- ✅ Section query enhancement (sections → headings, structure, topics)
+- ✅ Visual reasoning enhancement (analyze → diagram, display, graphic)
+- ✅ Configurable system with enable/disable flags and debug logging
+- ✅ Production tested in Streamlit chat interface
+
 ### Domain-Specific Context
 - **Architecture Education**: Focus on construction drawings, plans, elevations, sections
 - **Drawing Types**: Floor plans, site plans, elevations, details, perspectives
@@ -54,11 +63,12 @@ This is a Canvas RAG v2 system for architecture education that combines text and
 - `src/vision/` - Vision AI integration modules (✅ Complete)
 - `src/generation/` - LLM integration and response generation
 - `src/processing/` - Content processing including section-aware text processing (✅ Enhanced)
-- `src/retrieval/` - Hybrid search and retrieval logic
+- `src/retrieval/` - Hybrid search, query enhancement, and retrieval logic (✅ Enhanced)
 - `src/indexing/` - Vector database operations with section query support (✅ Enhanced)
 
 ### Key Implementation Files
 - `src/processing/content_processor.py` - Section detection and chunking logic
+- `src/retrieval/hybrid_search.py` - Query enhancement and hybrid search engine (✅ Enhanced)
 - `src/indexing/vector_store.py` - Enhanced retrieval with section prioritization (bug fixed)
 - `scripts/run_pipeline.py` - Main pipeline with section-aware processing
 - `debug_db.py` - Database inspection tool (essential debugging)
@@ -73,8 +83,10 @@ This is a Canvas RAG v2 system for architecture education that combines text and
 ### Current Status & Known Issues
 - ✅ OpenAI embedding integration working with rate limiting protection
 - ✅ Section heading retrieval bug fixed (Aug 1, 2025)
+- ✅ Query enhancement system implemented and production tested (Jan 8, 2025)
 - ✅ BM25 sparse index fully functional for hybrid retrieval
 - ✅ Repository cleaned of temporary scripts and debug files
+- ✅ Intelligent query expansion with architectural domain expertise
 - ⚠️ Section detection: Currently finds 4/5 target headings (needs investigation)
 - ⚠️ Chat UI testing: Section queries tested in CLI but not fully verified in Streamlit interface
 
@@ -83,6 +95,7 @@ This is a Canvas RAG v2 system for architecture education that combines text and
 - Investigate missing 5th section heading
 - Full end-to-end testing in chat UI
 - Verify section structure queries work in production interface
+- Performance optimization and embedding model resolution
 
 When implementing new features:
 1. Follow the existing module structure

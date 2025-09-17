@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 
 from ..indexing.vector_store import HybridRetriever
+from ..config.settings import settings
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -95,6 +96,88 @@ class QueryProcessor:
         
         logger.debug(f"Query analysis: {analysis}")
         return analysis
+    
+    def enhance_query(self, query: str, analysis: Dict[str, Any] = None) -> str:
+        """
+        Enhance query based on analysis for better retrieval.
+        
+        Args:
+            query: Original user query
+            analysis: Query analysis results (optional, will analyze if not provided)
+            
+        Returns:
+            Enhanced query string with expanded terms
+        """
+        if analysis is None:
+            analysis = self.analyze_query(query)
+        
+        enhanced_terms = set()
+        query_lower = query.lower()
+        
+        # 1. Add architectural synonyms for detected drawing types
+        for drawing_type in analysis.get('drawing_types', []):
+            if drawing_type in self.drawing_keywords:
+                # Add related terms but avoid duplicating words already in query
+                for keyword in self.drawing_keywords[drawing_type]:
+                    if keyword not in query_lower:
+                        enhanced_terms.add(keyword)
+        
+        # 2. Section query enhancement
+        if any(word in query_lower for word in ['section', 'heading', 'topic', 'structure']):
+            section_terms = ['headings', 'topics', 'sections', 'structure', 'organization', 'outline']
+            for term in section_terms:
+                if term not in query_lower:
+                    enhanced_terms.add(term)
+        
+        # 3. Question type optimization
+        question_type = analysis.get('question_type', 'general')
+        
+        if question_type == 'what' and any(word in query_lower for word in ['is', 'are', 'purpose', 'function']):
+            enhanced_terms.update(['definition', 'purpose', 'function', 'meaning'])
+        
+        elif question_type == 'how' and any(word in query_lower for word in ['read', 'interpret', 'understand']):
+            enhanced_terms.update(['method', 'technique', 'procedure', 'process', 'steps'])
+        
+        elif question_type == 'where' and any(word in query_lower for word in ['find', 'locate', 'position']):
+            enhanced_terms.update(['location', 'position', 'placement', 'coordinates'])
+        
+        elif question_type == 'when' and any(word in query_lower for word in ['produce', 'create', 'use']):
+            enhanced_terms.update(['timing', 'phase', 'stage', 'process'])
+        
+        elif question_type == 'why' and any(word in query_lower for word in ['important', 'necessary', 'need']):
+            enhanced_terms.update(['importance', 'reason', 'rationale', 'benefit'])
+        
+        # 4. Intent-based enhancement
+        intent = analysis.get('intent', 'factual')
+        
+        if intent == 'visual_reasoning':
+            visual_terms = ['diagram', 'illustration', 'graphic', 'visual', 'display']
+            enhanced_terms.update(term for term in visual_terms if term not in query_lower)
+        
+        elif intent == 'measurement':
+            measurement_terms = ['dimension', 'size', 'measurement', 'scale', 'units']
+            enhanced_terms.update(term for term in measurement_terms if term not in query_lower)
+        
+        # 5. Architectural context expansion
+        arch_context_words = ['construction', 'building', 'design', 'architecture']
+        if any(word in query_lower for word in arch_context_words):
+            arch_terms = ['technical', 'engineering', 'architectural', 'design']
+            enhanced_terms.update(term for term in arch_terms if term not in query_lower)
+        
+        # Build enhanced query
+        if enhanced_terms:
+            # Limit number of enhancement terms to avoid query bloat
+            max_terms = settings.query_enhancement_max_terms
+            sorted_terms = sorted(enhanced_terms)[:max_terms]
+            enhanced_query = f"{query} {' '.join(sorted_terms)}"
+            
+            if settings.query_enhancement_debug:
+                logger.debug(f"Enhanced query: '{query}' → '{enhanced_query}' (added: {sorted_terms})")
+            return enhanced_query
+        
+        if settings.query_enhancement_debug:
+            logger.debug(f"No enhancement applied to query: '{query}'")
+        return query
 
 class ResultProcessor:
     """Processes and enhances search results."""
@@ -233,8 +316,13 @@ class HybridSearchEngine:
             # Analyze query
             query_analysis = self.query_processor.analyze_query(query)
             
-            # Perform retrieval
-            raw_results = self.retriever.retrieve(query, n_results)
+            # Enhance query if enabled
+            enhanced_query = query
+            if settings.enable_query_enhancement:
+                enhanced_query = self.query_processor.enhance_query(query, query_analysis)
+            
+            # Perform retrieval with enhanced query
+            raw_results = self.retriever.retrieve(enhanced_query, n_results)
             
             if not raw_results:
                 logger.warning("No results found")
@@ -273,6 +361,7 @@ class HybridSearchEngine:
             
             search_response = {
                 'query': query,
+                'enhanced_query': enhanced_query if settings.enable_query_enhancement else None,
                 'query_analysis': query_analysis,
                 'results': search_results,
                 'total_results': len(search_results),

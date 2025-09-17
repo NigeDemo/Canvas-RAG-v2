@@ -4,9 +4,9 @@
 
 ### Understanding the Project in 5 Minutes
 
-1. **What it does**: Lets architecture students ask natural language questions about Canvas course content with support for page structure queries
-2. **How it works**: Downloads Canvas pages → Section-aware text processing → Extracts text & image refs → Stores in vector DB → GPT-4 + Vision AI answers questions
-3. **Current state**: Phase 2+ complete - works well for text AND can analyze architectural drawings visually AND understands page structure
+1. **What it does**: Lets architecture students ask natural language questions about Canvas course content with support for page structure queries and intelligent query enhancement
+2. **How it works**: Downloads Canvas pages → Section-aware text processing → Query enhancement → Extracts text & image refs → Stores in vector DB → GPT-4 + Vision AI answers questions
+3. **Current state**: Phase 2++ complete - works well for text AND can analyze architectural drawings visually AND understands page structure AND enhances queries intelligently
 4. **Next goal**: Performance optimization and embedding model resolution (Phase 3)
 
 ### Key Files to Understand
@@ -14,6 +14,7 @@
 ```
 src/ui/vision_chat_app.py    # Vision-enhanced Streamlit interface
 src/vision/vision_rag_integration.py # Vision AI integration
+src/retrieval/hybrid_search.py # Query enhancement and hybrid search engine
 src/indexing/vector_store.py # ChromaDB operations & section-aware retrieval
 src/processing/content_processor.py # Section-aware Canvas content processing
 scripts/run_pipeline.py     # End-to-end pipeline with section detection
@@ -21,15 +22,17 @@ scripts/run_pipeline.py     # End-to-end pipeline with section detection
 
 ### Current Data Flow
 ```
-Canvas HTML → Section Detection → Section-aware chunking → Text chunks + Image URLs → OpenAI embeddings → ChromaDB → Vector search + Section prioritization → Vision AI analysis → GPT-4 synthesis
+Canvas HTML → Section Detection → Section-aware chunking → Query Enhancement → Text chunks + Image URLs → OpenAI embeddings → ChromaDB → Vector search + Section prioritization → Vision AI analysis → GPT-4 synthesis
 ```
 
-### Recent Major Update (August 2025)
+### Recent Major Update (January 2025)
+- ✅ **Query Enhancement**: Intelligent expansion with architectural synonyms and optimization
 - ✅ **Section-Aware Architecture**: System now detects and separately indexes page section headings
 - ✅ **Structure Queries**: Supports "what sections are on this page?" queries
 - ✅ **Enhanced Retrieval**: Section headings prioritized for structure-related queries
 - ✅ **Section Query Bug Fix**: Fixed section heading retrieval prioritization (Aug 1, 2025)
 - ✅ **OpenAI Integration**: Fully functional with rate limiting protection
+- ✅ **Production Testing**: Query enhancement validated in Streamlit chat interface
 
 ### Running the System
 
@@ -46,7 +49,12 @@ pip install -e .
 copy .env.template .env  # Windows
 # cp .env.template .env  # macOS/Linux
 
-# 4. Validate your setup
+# 4. Configure query enhancement (optional)
+# ENABLE_QUERY_ENHANCEMENT=true        # Enable intelligent query expansion
+# QUERY_ENHANCEMENT_MAX_TERMS=10       # Maximum additional terms to add
+# QUERY_ENHANCEMENT_DEBUG=true         # Enable debug logging
+
+# 5. Validate your setup
 python scripts\validate_setup.py
 ```
 
@@ -95,10 +103,12 @@ You can also use the pre-configured tasks:
 - `Ctrl+Shift+P` → "Tasks: Run Task" → "Setup Vision AI"
 
 ### Current Capabilities ✅
-1. **Text-based queries** - Full semantic search
+1. **Text-based queries** - Full semantic search with intelligent query enhancement
 2. **Image analysis** - GPT-4 Vision integration for architectural drawings
 3. **OCR extraction** - Text extraction from technical drawings
 4. **Visual reasoning** - Detailed analysis of electrical plans, elevations, etc.
+5. **Query Enhancement** - Automatic expansion with architectural synonyms
+6. **Structure Queries** - Support for "what sections are on this page?" queries
 
 ### Known Issues Needing Work
 1. **BM25 not initializing** - only vector search works
@@ -111,8 +121,10 @@ You can also use the pre-configured tasks:
 - **Content**: Canvas LMS pages with embedded architectural drawings
 - **Challenge**: Making technical visual content searchable and queryable
 
-### Test the Vision AI
+### Test the Vision AI & Query Enhancement
 Ask questions like:
-- "Can you describe the electrical plan?"
-- "What rooms are shown in this floor plan?"
-- "What are the dimensions shown in this drawing?"
+- "Can you describe the electrical plan?" (automatically enhanced with electrical terms)
+- "What rooms are shown in this floor plan?" (floor plan enhanced to layout, site plan)
+- "What are the dimensions shown in this drawing?" (enhanced for visual reasoning)
+- "What sections are on this page?" (enhanced for structure queries)
+- "How to create elevations?" (how enhanced to method, technique, procedure)

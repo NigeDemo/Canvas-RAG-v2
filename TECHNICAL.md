@@ -4,7 +4,7 @@
 
 **Project**: Canvas RAG v2 - Architecture course content assistant  
 **Domain**: Architecture education, technical drawing analysis  
-**Current Status**: Phase 2+ complete (vision AI + section-aware architecture implemented)  
+**Current Status**: Phase 2++ complete (vision AI + section-aware architecture + query enhancement implemented)  
 **Next Priority**: Performance optimization and embedding model resolution (Phase 3)  
 **Tech Stack**: Canvas API → Python → Section Detection → OpenAI (embeddings + GPT-4 + Vision) → ChromaDB → Streamlit  
 
@@ -19,9 +19,10 @@
 4. **Section-Based Chunking**: Create separate chunks for headings and content
 5. **Vectorization**: Create embeddings using OpenAI text-embedding-3-large
 6. **Storage**: Store in ChromaDB with section metadata
-7. **Enhanced Retrieval**: Vector similarity search with section prioritization
-8. **Vision AI Integration**: GPT-4 Vision analysis for architectural drawings
-9. **Generation**: GPT-4 synthesis with intelligent prompting and vision analysis
+7. **Query Enhancement**: Intelligent expansion with architectural synonyms
+8. **Enhanced Retrieval**: Vector similarity search with section prioritization
+9. **Vision AI Integration**: GPT-4 Vision analysis for architectural drawings
+10. **Generation**: GPT-4 synthesis with intelligent prompting and vision analysis
 
 ### What Gets Indexed
 
@@ -73,6 +74,21 @@
 ```
 
 ### Query Processing
+
+#### Query Enhancement (NEW)
+- **Architectural Synonyms**: Automatic expansion of domain-specific terms
+  - "floor plan" → "layout", "site plan", "building plan"
+  - "elevation" → "facade", "external view", "building front"
+  - "section" → "cross-section", "sectional view", "cut"
+- **Question Type Optimization**: Enhancement of interrogative queries
+  - "how" → "method", "technique", "procedure", "process"
+  - "what" → "definition", "explanation", "description"
+  - "where" → "location", "position", "placement"
+- **Section Query Enhancement**: Intelligent section/structure query processing
+  - "sections" → "headings", "structure", "topics", "organization"
+- **Visual Reasoning Enhancement**: Improved queries for image analysis
+  - "analyze" → "diagram", "display", "graphic", "visual", "illustration"
+- **Configuration**: Controlled by ENABLE_QUERY_ENHANCEMENT, max terms limit, debug logging
 
 #### Section Structure Queries (NEW)
 - **Detection**: `is_section_heading_query()` identifies structure-related queries
@@ -137,6 +153,30 @@ IMPORTANT INSTRUCTIONS FOR YOUR RESPONSE:
 - **Issue**: Using text-only embeddings for storage
 - **Impact**: Cannot semantically understand image-text relationships
 - **Solution**: Implement true multimodal embeddings (e.g., CLIP, Nomic)
+
+## Implementation Details
+
+### Query Enhancement Configuration
+```python
+# Environment variables in .env
+ENABLE_QUERY_ENHANCEMENT=true
+QUERY_ENHANCEMENT_MAX_TERMS=10
+QUERY_ENHANCEMENT_DEBUG=true
+
+# Usage in hybrid_search.py
+enhanced_query = self.query_processor.enhance_query(
+    query=query,
+    max_additional_terms=max_terms,
+    debug=debug_enabled
+)
+```
+
+### Debug Logging
+Query enhancement operations are logged to `logs/canvas_rag.log`:
+```
+DEBUG - Query enhancement: 'floor plan' → ['floor plan', 'layout', 'site plan', 'building plan']
+DEBUG - Visual reasoning: 'analyze' → ['analyze', 'diagram', 'display', 'graphic']
+```
 
 ## Development Priorities
 

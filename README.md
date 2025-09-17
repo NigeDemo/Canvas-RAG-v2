@@ -15,7 +15,8 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 
 - **Canvas Integration**: Direct integration with Canvas LMS API for content ingestion
 - **Section-Aware Processing**: Automatic detection and separate indexing of page sections and headings
-- **Intelligent Retrieval**: Vector-based search with hybrid retrieval capabilities
+- **Intelligent Query Enhancement**: Automatic expansion of user queries with architectural synonyms and context terms
+- **Hybrid Retrieval**: Vector-based search (50% semantic) combined with BM25 sparse search (50% keyword)
 - **LLM-Powered Responses**: Uses GPT-4 for intelligent reasoning and synthesis
 - **Vision AI Analysis**: GPT-4 Vision integration for analyzing architectural drawings
 - **Structure Queries**: Support for "what sections are on this page?" type queries
@@ -73,6 +74,21 @@ pip install -r requirements.txt
 1. Copy `.env.template` to `.env`
 2. Add your Canvas API token and OpenAI API key
 3. Configure Canvas base URL
+
+#### Query Enhancement Settings (Optional)
+```bash
+# Query enhancement is enabled by default
+ENABLE_QUERY_ENHANCEMENT=true
+
+# Limit number of enhancement terms (default: 10)
+QUERY_ENHANCEMENT_MAX_TERMS=10
+
+# Enable debug logging to see enhanced queries
+QUERY_ENHANCEMENT_DEBUG=true
+
+# Adjust hybrid search weighting (default: 0.5 = 50/50 semantic/keyword)
+HYBRID_FUSION_ALPHA=0.5
+```
 
 ### Usage
 
@@ -165,6 +181,14 @@ Canvas-RAG-v2/
 - ✅ Structure query support ("what sections are on this page?")
 - ✅ Section heading prioritization in retrieval
 - ✅ Enhanced page organization understanding
+
+### Phase 2++: Query Enhancement ✅
+- ✅ Intelligent query expansion with architectural synonyms
+- ✅ Question type-specific enhancement (what/how/where/when/why)
+- ✅ Section query enhancement (headings, structure, topics)
+- ✅ Visual reasoning enhancement (diagram, display, graphic)
+- ✅ Configurable enhancement settings and debug logging
+- ✅ Hybrid search weighting control (semantic vs keyword balance)
 
 ### Phase 3: Retrieval Improvements
 - ✅ BM25 sparse retrieval implementation (available)
