@@ -261,7 +261,10 @@ Focus on technical architectural content that would be relevant for construction
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # Extract text
+            # Extract structured sections from details elements
+            sections = self._extract_html_sections(soup)
+            
+            # Extract text (fallback for non-structured content)
             text = soup.get_text(separator=' ', strip=True)
             
             # Clean up whitespace
@@ -290,6 +293,7 @@ Focus on technical architectural content that would be relevant for construction
             
             return {
                 "text": text,
+                "sections": sections,  # Add structured sections
                 "image_urls": image_urls,
                 "links": links,
                 "content_type": "html"
@@ -297,15 +301,65 @@ Focus on technical architectural content that would be relevant for construction
             
         except Exception as e:
             logger.error(f"Error extracting HTML content: {e}")
-            return {"text": "", "image_urls": [], "links": [], "content_type": "html"}
+            return {"text": "", "sections": [], "image_urls": [], "links": [], "content_type": "html"}
     
-    def chunk_text(self, text: str, metadata: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    def _extract_html_sections(self, soup) -> List[Dict[str, str]]:
+        """
+        Extract sections from HTML details/summary structure.
+        
+        Args:
+            soup: BeautifulSoup parsed HTML
+            
+        Returns:
+            List of sections with headings and content
+        """
+        sections = []
+        
+        # Find top-level details elements (main sections)
+        main_details = soup.find_all('details', recursive=False)
+        
+        # If no top-level details, look for any details elements
+        if not main_details:
+            main_details = soup.find_all('details')
+        
+        for detail in main_details:
+            summary = detail.find('summary')
+            if summary:
+                # Extract heading from summary
+                heading = summary.get_text(strip=True)
+                # Clean up the heading text
+                heading = re.sub(r'\s+', ' ', heading)
+                
+                # Extract content (everything in details except the summary)
+                # Get all content excluding the summary
+                content_parts = []
+                for element in detail.children:
+                    if element.name != 'summary':
+                        if hasattr(element, 'get_text'):
+                            content_parts.append(element.get_text(separator=' ', strip=True))
+                        elif isinstance(element, str):
+                            content_parts.append(element.strip())
+                
+                content = ' '.join(content_parts)
+                content = re.sub(r'\s+', ' ', content).strip()
+                
+                if heading and content:
+                    sections.append({
+                        'heading': heading,
+                        'content': content
+                    })
+        
+        logger.info(f"Extracted {len(sections)} sections from HTML structure")
+        return sections
+    
+    def chunk_text(self, text: str, metadata: Dict[str, Any] = None, html_sections: List[Dict[str, str]] = None) -> List[Dict[str, Any]]:
         """
         Split text into chunks with section-aware processing.
         
         Args:
             text: Text to chunk
             metadata: Additional metadata to include
+            html_sections: Pre-extracted sections from HTML structure
             
         Returns:
             List of text chunks with metadata
@@ -314,30 +368,40 @@ Focus on technical architectural content that would be relevant for construction
             return []
         
         # Try section-aware chunking first
-        sections = self._extract_sections(text)
+        sections = self._extract_sections(text, html_sections)
         if sections:
             return self._chunk_by_sections(sections, metadata)
         
         # Fall back to word-based chunking
         return self._chunk_by_words(text, metadata)
     
-    def _extract_sections(self, text: str) -> List[Dict[str, str]]:
+    def _extract_sections(self, text: str, html_sections: List[Dict[str, str]] = None) -> List[Dict[str, str]]:
         """
-        Extract sections from text based on question headings.
+        Extract sections from text, preferring HTML structure if available.
         
         Args:
             text: Text to analyze
+            html_sections: Pre-extracted sections from HTML structure
             
         Returns:
             List of sections with headings and content
         """
-        # Known section headings from Canvas content
+        # If we have HTML sections, use those directly
+        if html_sections:
+            logger.info(f"Using {len(html_sections)} sections from HTML structure")
+            return html_sections
+        
+        # Fallback to text-based section detection for non-HTML content
+        logger.info("Using fallback text-based section detection")
+        
+        # Known section headings from Canvas content (fallback only)
         known_headings = [
             "Why do we produce a 'Technical', 'Working', or' Construction' Drawing Pack?",
             "Who is responsible for the Technical Drawing Pack?",
             "When do we produce a Technical Drawing Pack?",
             "What is in an Architectural 'Technical', 'Working', or' Construction' Drawing Pack?",
-            "Drawing Standards and Construction 'Rules of Thumb'"
+            "Drawing Standards",
+            "Construction 'Rules of Thumb'"
         ]
         
         # Alternative patterns for section detection
@@ -346,42 +410,47 @@ Focus on technical architectural content that would be relevant for construction
             r'Who\s+is\s+responsible.*?Drawing\s+Pack\?',
             r'When\s+do\s+we\s+produce.*?Drawing\s+Pack\?',
             r'What\s+is\s+in.*?Drawing\s+Pack\?',
-            r'Drawing\s+Standards\s+and\s+Construction'
+            r'Drawing\s+Standards',
+            r'Construction\s+[''"]\s*Rules\s+of\s+Thumb\s*[''""]'
         ]
         
         sections = []
-        remaining_text = text
         
-        # Try to find sections using known headings first
+        # Find all heading positions first
+        heading_positions = []
         for heading in known_headings:
-            pos = remaining_text.find(heading)
+            pos = text.find(heading)
             if pos >= 0:
-                # Find the end of this section (start of next heading or end of text)
-                section_start = pos
-                section_end = len(remaining_text)
-                
-                # Look for the next heading
-                for next_heading in known_headings:
-                    if next_heading != heading:
-                        next_pos = remaining_text.find(next_heading, pos + len(heading))
-                        if next_pos >= 0 and next_pos < section_end:
-                            section_end = next_pos
-                
-                # Extract section content
-                section_text = remaining_text[section_start:section_end]
-                
-                # Split heading from content
-                content_start = len(heading)
-                content = section_text[content_start:].strip()
-                
-                # Remove duplicate heading if it appears again at start of content
-                if content.startswith(heading):
-                    content = content[len(heading):].strip()
-                
-                sections.append({
-                    'heading': heading,
-                    'content': content
-                })
+                heading_positions.append((pos, heading))
+        
+        # Sort by position
+        heading_positions.sort()
+        
+        # Extract sections based on sorted positions
+        for i, (pos, heading) in enumerate(heading_positions):
+            section_start = pos
+            
+            # Find end of section (start of next section or end of text)
+            if i + 1 < len(heading_positions):
+                section_end = heading_positions[i + 1][0]
+            else:
+                section_end = len(text)
+            
+            # Extract section content
+            section_text = text[section_start:section_end]
+            
+            # Split heading from content
+            content_start = len(heading)
+            content = section_text[content_start:].strip()
+            
+            # Remove duplicate heading if it appears again at start of content
+            if content.startswith(heading):
+                content = content[len(heading):].strip()
+            
+            sections.append({
+                'heading': heading,
+                'content': content
+            })
         
         # If no known headings found, try pattern matching
         if not sections:
@@ -541,7 +610,8 @@ Focus on technical architectural content that would be relevant for construction
                         "url": content_item["url"],
                         "created_at": content_item.get("created_at"),
                         "updated_at": content_item.get("updated_at")
-                    }
+                    },
+                    html_content.get("sections", [])  # Pass HTML sections
                 )
                 processed_segments.extend(text_chunks)
                 
