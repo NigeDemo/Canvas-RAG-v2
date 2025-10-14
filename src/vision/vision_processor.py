@@ -141,8 +141,78 @@ class VisionProcessor:
             logger.error(f"Error downloading image from {url}: {e}")
             raise
     
+    def _detect_image_format(self, image_data: bytes) -> str:
+        """Detect image format from bytes."""
+        if image_data.startswith(b'\xff\xd8\xff'):
+            return 'jpeg'
+        elif image_data.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'png'
+        elif image_data.startswith(b'GIF87a') or image_data.startswith(b'GIF89a'):
+            return 'gif'
+        elif image_data.startswith(b'RIFF') and b'WEBP' in image_data[:12]:
+            return 'webp'
+        elif image_data.startswith(b'BM'):
+            return 'bmp'
+        else:
+            return 'unknown'
+    
+    def _convert_to_supported_format(self, image_data: bytes, current_format: str) -> bytes:
+        """Convert image to supported format if needed.
+        
+        Converts BMP and other unsupported formats to PNG for Vision API compatibility.
+        
+        Args:
+            image_data: Raw image bytes
+            current_format: Detected image format
+            
+        Returns:
+            Converted image data as PNG bytes
+            
+        Raises:
+            ValueError: If the image cannot be read or converted
+        """
+        # Supported formats for Vision APIs
+        supported_formats = ['png', 'jpeg', 'gif', 'webp']
+        
+        if current_format in supported_formats:
+            return image_data
+        
+        # Convert unsupported formats (BMP, etc.) to PNG
+        try:
+            logger.info(f"Converting {current_format.upper()} to PNG for Vision API compatibility")
+            
+            # Open the image - this will fail if not a valid image file
+            img = Image.open(BytesIO(image_data))
+            
+            # Convert to RGB if necessary (for RGBA, P, etc.)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Save as PNG
+            output = BytesIO()
+            img.save(output, format='PNG')
+            converted_data = output.getvalue()
+            
+            logger.info(f"Successfully converted {current_format.upper()} to PNG ({len(image_data)} -> {len(converted_data)} bytes)")
+            return converted_data
+            
+        except Exception as e:
+            # PIL cannot read this file - it's not a valid image
+            logger.warning(f"Cannot convert {current_format} to PNG: {e}. File is not a valid image, skipping.")
+            raise ValueError(f"Invalid or unsupported image file: {e}")
+    
     def _prepare_image_data(self, image_input: Union[str, bytes, Path]) -> bytes:
-        """Prepare image data from various input types."""
+        """Prepare image data from various input types.
+        
+        This method:
+        1. Loads image from URL, file path, or bytes
+        2. Validates the image data
+        3. Detects the image format
+        4. Converts unsupported formats (like BMP) to PNG
+        
+        Format conversion happens HERE (before caching) to ensure cache
+        only stores compatible formats.
+        """
         image_data = None
         
         if isinstance(image_input, bytes):
@@ -165,14 +235,20 @@ class VisionProcessor:
         if len(image_data) < 10:
             raise ValueError("Image data too small to be valid")
         
-        # Basic image format validation
-        if not (image_data.startswith(b'\xff\xd8\xff') or  # JPEG
-                image_data.startswith(b'\x89PNG\r\n\x1a\n') or  # PNG
-                image_data.startswith(b'GIF87a') or  # GIF
-                image_data.startswith(b'GIF89a') or  # GIF
-                image_data.startswith(b'RIFF') or  # WEBP
-                image_data.startswith(b'BM')):  # BMP
-            logger.warning("Image format may not be supported")
+        # Detect format and convert if needed (BEFORE caching)
+        image_format = self._detect_image_format(image_data)
+        
+        # Convert unsupported or unknown formats to PNG
+        if image_format in ['png', 'jpeg', 'gif', 'webp']:
+            # Already in supported format, no conversion needed
+            pass
+        elif image_format == 'unknown':
+            logger.warning(f"Unknown image format detected, attempting conversion via PIL")
+            image_data = self._convert_to_supported_format(image_data, image_format)
+        else:
+            # Known unsupported format (BMP, etc.)
+            logger.info(f"{image_format.upper()} format detected, converting to PNG")
+            image_data = self._convert_to_supported_format(image_data, image_format)
         
         return image_data
     

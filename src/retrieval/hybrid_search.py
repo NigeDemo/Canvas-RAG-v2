@@ -47,7 +47,9 @@ class QueryProcessor:
             'when': r'\bwhen\b.*\?',
             'why': r'\bwhy\b.*\?',
             'scale': r'\b(scale|dimension|size|measurement)\b',
-            'visual': r'\b(show|display|image|drawing|figure|diagram)\b'
+            'visual': r'\b(show|display|image|drawing|figure|diagram)\b',
+            'module': r'\b(session|module|week)\s+(\d+)\b',
+            'module_content': r'\b(covered|taught|learn|topics?)\b.*\b(session|module|week)\s+(\d+)\b'
         }
     
     def analyze_query(self, query: str) -> Dict[str, Any]:
@@ -68,9 +70,30 @@ class QueryProcessor:
             'drawing_types': [],
             'question_type': 'general',
             'is_visual_query': False,
+            'is_module_query': False,
+            'module_number': None,
             'keywords': [],
-            'intent': 'factual'
+            'intent': 'factual',
+            'is_image_listing': False
         }
+        
+        # Detect module/session queries
+        module_match = re.search(self.question_patterns['module'], query_lower)
+        if module_match:
+            analysis['is_module_query'] = True
+            analysis['module_number'] = module_match.group(2)
+            analysis['intent'] = 'module_content'
+            logger.debug(f"Detected module query for Session/Module {analysis['module_number']}")
+
+        # Detect explicit references to images/drawings
+        image_terms = ['image', 'images', 'drawing', 'drawings', 'diagram', 'diagrams', 'plan', 'plans', 'visual', 'visuals', 'render', 'renders']
+        request_terms = ['list', 'show', 'display', 'provide', 'share', 'give', 'find', 'available', 'include', 'what', 'which']
+
+        if any(term in query_lower for term in image_terms):
+            analysis['is_visual_query'] = True
+            if analysis['is_module_query'] and any(term in query_lower for term in request_terms):
+                analysis['intent'] = 'module_image_listing'
+                analysis['is_image_listing'] = True
         
         # Detect drawing types
         for drawing_type, keywords in self.drawing_keywords.items():
@@ -81,17 +104,18 @@ class QueryProcessor:
         
         # Detect question type
         for q_type, pattern in self.question_patterns.items():
-            if re.search(pattern, query_lower):
+            if q_type not in ['module', 'module_content'] and re.search(pattern, query_lower):
                 analysis['question_type'] = q_type
                 break
         
         # Detect visual queries
         if re.search(self.question_patterns['visual'], query_lower):
             analysis['is_visual_query'] = True
-            analysis['intent'] = 'visual_reasoning'
+            if not analysis['is_module_query']:  # Don't override module intent
+                analysis['intent'] = 'visual_reasoning'
         
         # Detect scale/measurement queries
-        if re.search(self.question_patterns['scale'], query_lower):
+        if re.search(self.question_patterns['scale'], query_lower) and not analysis['is_module_query']:
             analysis['intent'] = 'measurement'
         
         logger.debug(f"Query analysis: {analysis}")
@@ -113,6 +137,25 @@ class QueryProcessor:
         
         enhanced_terms = set()
         query_lower = query.lower()
+        
+        # 0. Module query enhancement (highest priority)
+        if analysis.get('is_module_query') and analysis.get('module_number'):
+            module_num = analysis['module_number']
+            # Add module-related terms to help find both module content and prep materials
+            enhanced_terms.update([
+                f'Session {module_num}',
+                f'Module {module_num}',
+                f'Week {module_num}'
+            ])
+            if analysis.get('is_image_listing'):
+                enhanced_terms.update(['images', 'drawings', 'visual references', 'architectural drawings'])
+            logger.debug(f"Enhanced module query for Session/Module {module_num}")
+            # For module queries, focus on the module itself, don't add too many extra terms
+            if enhanced_terms:
+                enhanced_query = f"{query} {' '.join(enhanced_terms)}"
+                if settings.query_enhancement_debug:
+                    logger.debug(f"Module-enhanced query: '{query}' → '{enhanced_query}'")
+                return enhanced_query
         
         # 1. Add architectural synonyms for detected drawing types
         for drawing_type in analysis.get('drawing_types', []):
@@ -322,7 +365,11 @@ class HybridSearchEngine:
                 enhanced_query = self.query_processor.enhance_query(query, query_analysis)
             
             # Perform retrieval with enhanced query
-            raw_results = self.retriever.retrieve(enhanced_query, n_results)
+            raw_results = self.retriever.retrieve(
+                enhanced_query,
+                n_results,
+                original_query=query,
+            )
             
             if not raw_results:
                 logger.warning("No results found")

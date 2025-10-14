@@ -9,7 +9,7 @@ requests>=2.31.0
 # Vision AI dependencies (Phase 2)
 anthropic>=0.57.0
 pillow>=10.0.0
-pdf2image>=1.17.0
+# Removed pdf2image - replaced with PyMuPDF
 
 # Canvas LMS integration
 canvasapi>=3.2.0
@@ -18,8 +18,9 @@ canvasapi>=3.2.0
 beautifulsoup4>=4.12.0
 pypdf>=3.17.0
 
-# PDF and image processing
-# pdf2image already specified above
+# PDF and Office document processing
+PyMuPDF>=1.24.0  # Pure Python PDF processing (text + images, no system dependencies)
+python-pptx>=1.0.0  # PowerPoint file processing
 
 # Current embedding model (OpenAI)
 # Note: sentence-transformers not currently used but available for local embeddings

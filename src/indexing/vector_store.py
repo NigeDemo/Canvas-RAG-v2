@@ -22,6 +22,39 @@ from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+def sanitize_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize metadata for ChromaDB by removing None values and ensuring valid types.
+    
+    ChromaDB only accepts: bool, int, float, str, or sparse vectors.
+    None values cause TypeError.
+    
+    Args:
+        metadata: Original metadata dictionary
+        
+    Returns:
+        Sanitized metadata dictionary
+    """
+    sanitized = {}
+    for key, value in metadata.items():
+        if value is None:
+            # Skip None values entirely
+            continue
+        elif isinstance(value, (bool, int, float, str)):
+            # Valid types - keep as is
+            sanitized[key] = value
+        elif isinstance(value, (list, tuple)):
+            # Convert lists/tuples to strings
+            sanitized[key] = str(value)
+        elif isinstance(value, dict):
+            # Convert dicts to JSON strings
+            sanitized[key] = json.dumps(value)
+        else:
+            # Convert any other type to string
+            sanitized[key] = str(value)
+    
+    return sanitized
+
 class VectorStore:
     """Manages vector storage and retrieval using ChromaDB."""
     
@@ -56,7 +89,7 @@ class VectorStore:
     def add_documents(self, 
                      documents: List[str], 
                      embeddings: np.ndarray, 
-                     metadata: List[Dict[str, Any]], 
+                     metadata: List[Dict[str, Any]],
                      ids: List[str] = None) -> None:
         """
         Add documents to the vector store.
@@ -71,13 +104,16 @@ class VectorStore:
             if ids is None:
                 ids = [str(uuid.uuid4()) for _ in documents]
             
+            # Sanitize metadata to remove None values
+            sanitized_metadata = [sanitize_metadata(meta) for meta in metadata]
+            
             # Convert numpy array to list for ChromaDB
             embeddings_list = embeddings.tolist()
             
             self.collection.add(
                 documents=documents,
                 embeddings=embeddings_list,
-                metadatas=metadata,
+                metadatas=sanitized_metadata,
                 ids=ids
             )
             
@@ -229,6 +265,17 @@ class HybridRetriever:
         # Check for explicit visual phrases first
         for phrase in explicit_visual_keywords:
             if phrase in query_lower:
+                return True
+
+        # Broader detection for list/show requests that mention images or drawings
+        image_nouns = ['image', 'images', 'drawing', 'drawings', 'diagram', 'diagrams', 'plan', 'plans', 'visual', 'visuals', 'render', 'renders']
+        request_verbs = ['list', 'show', 'display', 'provide', 'share', 'give', 'find', 'see', 'available', 'include', 'pull', 'fetch']
+
+        if any(noun in query_lower for noun in image_nouns):
+            if any(verb in query_lower for verb in request_verbs):
+                return True
+            # Questions like "what images" or "which drawings" should still count
+            if query_lower.strip().startswith(('what', 'which')):
                 return True
         
         # Check for visual analysis patterns only when combined with explicit visual request
@@ -405,32 +452,63 @@ class HybridRetriever:
             pass
         return False
     
-    def reciprocal_rank_fusion(self, dense_results: List[Tuple[int, float]], 
+    def reciprocal_rank_fusion(self, 
+                              dense_results: List[Tuple[int, float]], 
                               sparse_results: List[Tuple[int, float]], 
-                              k: int = 60) -> List[Tuple[int, float]]:
-        """Combine dense and sparse results using reciprocal rank fusion."""
-        # Calculate RRF scores
-        fused_scores = []
-        all_indices = set([idx for idx, _ in dense_results] + [idx for idx, _ in sparse_results])
+                              k: int = 60) -> List[Tuple[int, float, str]]:
+        """
+        Combine dense and sparse results using reciprocal rank fusion.
         
-        for idx in all_indices:
-            # Get ranks (1-indexed)
-            dense_rank = next((i + 1 for i, (doc_idx, _) in enumerate(dense_results) if doc_idx == idx), float('inf'))
-            sparse_rank = next((i + 1 for i, (doc_idx, _) in enumerate(sparse_results) if doc_idx == idx), float('inf'))
+        Args:
+            dense_results: List of (index, score) from dense retrieval
+            sparse_results: List of (index, score) from sparse retrieval
+            k: RRF constant (typically 60)
             
-            # Calculate RRF score
-            dense_score = 1.0 / (k + dense_rank) if dense_rank != float('inf') else 0.0
-            sparse_score = 1.0 / (k + sparse_rank) if sparse_rank != float('inf') else 0.0
-            
-            # Weighted combination
-            fused_score = self.alpha * dense_score + (1 - self.alpha) * sparse_score
-            fused_scores.append((idx, fused_score))
+        Returns:
+            List of (index, fused_score, source) tuples
+        """
+        fused_scores = {}
+        
+        # Process dense results
+        for rank, (idx, score) in enumerate(dense_results, start=1):
+            rrf_score = 1.0 / (k + rank)
+            fused_scores[idx] = {
+                'score': self.alpha * rrf_score,
+                'dense_rank': rank,
+                'sparse_rank': None,
+                'source': 'dense'
+            }
+        
+        # Process sparse results
+        for rank, (idx, score) in enumerate(sparse_results, start=1):
+            rrf_score = 1.0 / (k + rank)
+            if idx in fused_scores:
+                # Document appears in both - add scores
+                fused_scores[idx]['score'] += (1 - self.alpha) * rrf_score
+                fused_scores[idx]['sparse_rank'] = rank
+                fused_scores[idx]['source'] = 'hybrid'
+            else:
+                # Document only in sparse results
+                fused_scores[idx] = {
+                    'score': (1 - self.alpha) * rrf_score,
+                    'dense_rank': None,
+                    'sparse_rank': rank,
+                    'source': 'sparse'
+                }
         
         # Sort by fused score
-        fused_scores.sort(key=lambda x: x[1], reverse=True)
-        return fused_scores
+        sorted_results = sorted(fused_scores.items(), key=lambda x: x[1]['score'], reverse=True)
+        
+        # Return as list of (index, score, source) tuples
+        return [(idx, info['score'], info['source']) for idx, info in sorted_results]
     
-    def retrieve(self, query: str, n_results: int = 10) -> List[Dict[str, Any]]:
+    def retrieve(
+        self,
+        query: str,
+        n_results: int = 10,
+        *,
+        original_query: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Perform hybrid retrieval with image boosting.
         
@@ -442,11 +520,14 @@ class HybridRetriever:
             List of retrieved document dictionaries
         """
         try:
+            # Use the original query (pre-enhancement) for intent detection when available
+            analysis_query = original_query or query
+
             # Check if this is an image query
-            is_image_query = self.is_image_query(query)
+            is_image_query = self.is_image_query(analysis_query)
             
             # Check if this is a section heading query
-            is_section_query = self.is_section_heading_query(query)
+            is_section_query = self.is_section_heading_query(analysis_query)
             
             # Handle section heading queries specially
             if is_section_query:
@@ -585,67 +666,92 @@ class HybridRetriever:
                 
             else:
                 # Regular hybrid retrieval for non-image queries
+                logger.debug(f"Regular hybrid retrieval for query: '{query}'")
+                
+                # 1. Dense retrieval (vector search)
                 query_embedding = self.embedding_manager.embed_query(query)
                 dense_vector_results = self.vector_store.query(query_embedding, n_results * 2)
                 
-                # Convert ChromaDB results to (index, distance) format
+                # Convert ChromaDB results to (index, similarity) format
                 dense_results = []
                 if dense_vector_results.get("ids") and dense_vector_results["ids"][0]:
-                    for i, (doc_id, distance) in enumerate(zip(
-                        dense_vector_results["ids"][0], 
-                        dense_vector_results["distances"][0]
-                    )):
+                    for i, distance in enumerate(dense_vector_results["distances"][0]):
                         # Convert distance to similarity score (assuming cosine distance)
                         similarity = 1.0 - distance
                         dense_results.append((i, similarity))
+                    logger.debug(f"Dense retrieval: {len(dense_results)} results")
+                else:
+                    logger.warning("No dense results returned")
                 
-                # Sparse retrieval
-                sparse_results = self.sparse_index.query(query, n_results * 2)
+                # 2. Sparse retrieval (BM25)
+                sparse_results = []
+                if self.sparse_index.is_initialized:
+                    sparse_results = self.sparse_index.query(query, n_results * 2)
+                    logger.debug(f"BM25 sparse retrieval: {len(sparse_results)} results")
+                else:
+                    logger.warning("BM25 index not initialized - using dense-only retrieval")
                 
-                # Fusion
+                # 3. Fusion
                 if dense_results and sparse_results:
+                    logger.info(f"Hybrid fusion: {len(dense_results)} dense + {len(sparse_results)} sparse results")
                     fused_results = self.reciprocal_rank_fusion(dense_results, sparse_results)
+                    
+                    # Log fusion statistics
+                    hybrid_count = sum(1 for _, _, source in fused_results if source == 'hybrid')
+                    dense_only = sum(1 for _, _, source in fused_results if source == 'dense')
+                    sparse_only = sum(1 for _, _, source in fused_results if source == 'sparse')
+                    logger.info(f"Fusion results: {hybrid_count} hybrid, {dense_only} dense-only, {sparse_only} sparse-only")
+                    
                 elif dense_results:
-                    fused_results = dense_results
+                    logger.info("Using dense-only retrieval (no sparse results)")
+                    fused_results = [(i, score, 'dense') for i, score in dense_results]
                 elif sparse_results:
-                    fused_results = sparse_results
+                    logger.info("Using sparse-only retrieval (no dense results)")
+                    fused_results = [(i, score, 'sparse') for i, score in sparse_results]
                 else:
                     logger.warning("No results from either dense or sparse retrieval")
                     return []
                 
-                # Prepare final results
+                # 4. Prepare final results
                 final_results = []
-                for rank, (result_idx, score) in enumerate(fused_results[:n_results]):
-                    # Get document data
-                    if result_idx < len(dense_vector_results.get("documents", [[]])[0]):
-                        # From dense results
-                        doc_text = dense_vector_results["documents"][0][result_idx]
-                        metadata = dense_vector_results["metadatas"][0][result_idx]
-                        doc_id = dense_vector_results["ids"][0][result_idx]
-                    elif result_idx < len(self.sparse_index.documents):
-                        # From sparse results
-                        doc_text = self.sparse_index.documents[result_idx]
-                        metadata = self.sparse_index.metadata[result_idx]
-                        doc_id = f"sparse_{result_idx}"
-                    else:
-                        continue
+                for rank, (result_idx, score, source) in enumerate(fused_results[:n_results]):
+                    doc_id = None
+                    doc_text = None
+                    metadata = None
                     
-                    result_dict = {
-                        "id": doc_id,
-                        "text": doc_text,
-                        "score": score,
-                        "rank": rank + 1,
-                        "metadata": metadata
-                    }
-                    final_results.append(result_dict)
+                    # Get document data based on source
+                    if source in ['dense', 'hybrid']:
+                        # Try to get from dense results
+                        if result_idx < len(dense_vector_results.get("documents", [[]])[0]):
+                            doc_text = dense_vector_results["documents"][0][result_idx]
+                            metadata = dense_vector_results["metadatas"][0][result_idx]
+                            doc_id = dense_vector_results["ids"][0][result_idx]
+                    
+                    if doc_text is None and source in ['sparse', 'hybrid']:
+                        # Try to get from sparse results
+                        if result_idx < len(self.sparse_index.documents):
+                            doc_text = self.sparse_index.documents[result_idx]
+                            metadata = self.sparse_index.metadata[result_idx]
+                            doc_id = metadata.get('id', f"sparse_{result_idx}")
+                    
+                    if doc_text and metadata:
+                        result_dict = {
+                            "id": doc_id,
+                            "text": doc_text,
+                            "score": score,
+                            "rank": rank + 1,
+                            "metadata": metadata,
+                            "retrieval_source": source  # Track which retrieval method found this
+                        }
+                        final_results.append(result_dict)
                 
                 # Log retrieval statistics
                 image_count = sum(1 for result in final_results 
-                                if result["metadata"].get("content_type") == "image" or
+                                if result["metadata"].get("content_type") in ["image", "image_reference"] or
                                    result["metadata"].get("has_vision_analysis", False))
                 text_count = len(final_results) - image_count
                 
-                logger.info(f"Retrieved {len(final_results)} results for query: {text_count} text, {image_count} images")
+                logger.info(f"Retrieved {len(final_results)} results: {text_count} text, {image_count} images")
                 
                 return final_results
             
@@ -685,21 +791,23 @@ class IndexBuilder:
             collection = self.vector_store.client.get_collection(name=self.vector_store.collection_name)
             all_docs = collection.get()
             
-            # Filter for text content only
+            # Filter for text content only (including section-aware content)
             text_documents = []
             text_metadata = []
             
             for doc, metadata in zip(all_docs['documents'], all_docs['metadatas']):
                 content_type = metadata.get('content_type', '')
-                if content_type == 'text_chunk' and doc and len(doc.strip()) > 0:
+                # Include text_chunk, section_content, and section_heading
+                if content_type in ['text_chunk', 'section_content', 'section_heading'] and doc and len(doc.strip()) > 0:
                     text_documents.append(doc)
                     text_metadata.append(metadata)
             
             if text_documents:
                 self.sparse_index.add_documents(text_documents, text_metadata)
-                logger.info(f"Auto-populated sparse index with {len(text_documents)} text documents")
+                logger.info(f"✅ Auto-populated BM25 sparse index with {len(text_documents)} text documents")
+                logger.debug(f"   Content types: text_chunk, section_content, section_heading")
             else:
-                logger.warning("No text documents found to populate sparse index")
+                logger.warning("⚠️ No text documents found to populate sparse index")
                 
         except Exception as e:
             logger.warning(f"Could not auto-populate sparse index: {e}")
@@ -725,6 +833,10 @@ class IndexBuilder:
         metadata = []
         content_for_embedding = []
         
+        # Separate lists for sparse index (text only)
+        sparse_documents = []
+        sparse_metadata = []
+        
         for segment in content_segments:
             # Create document text for indexing
             doc_text = ""
@@ -743,6 +855,12 @@ class IndexBuilder:
                 documents.append(doc_text)
                 metadata.append(segment)
                 content_for_embedding.append(segment)
+                
+                # Add text content to sparse index
+                content_type = segment.get('content_type', '')
+                if content_type in ['text_chunk', 'section_content', 'section_heading']:
+                    sparse_documents.append(doc_text)
+                    sparse_metadata.append(segment)
         
         if not documents:
             logger.warning("No documents to index")
@@ -756,11 +874,21 @@ class IndexBuilder:
         logger.info("Adding documents to vector store...")
         self.vector_store.add_documents(documents, embeddings, metadata)
         
-        # Add to sparse index
-        logger.info("Adding documents to sparse index...")
-        self.sparse_index.add_documents(documents, metadata)
+        # Build BM25 sparse index with text documents only
+        logger.info(f"Building BM25 sparse index with {len(sparse_documents)} text documents...")
+        if sparse_documents:
+            # Clear existing sparse index and rebuild
+            self.sparse_index = SparseIndex()
+            self.sparse_index.add_documents(sparse_documents, sparse_metadata)
+            
+            # Update retriever with new sparse index
+            self.retriever.sparse_index = self.sparse_index
+            
+            logger.info(f"✅ BM25 sparse index built successfully with {len(sparse_documents)} documents")
+        else:
+            logger.warning("⚠️ No text documents found for BM25 indexing")
         
-        logger.info(f"Index building complete. Indexed {len(documents)} documents")
+        logger.info(f"Index building complete. Vector store: {len(documents)} documents, BM25 index: {len(sparse_documents)} text documents")
     
     def get_retriever(self) -> HybridRetriever:
         """Get the hybrid retriever instance."""

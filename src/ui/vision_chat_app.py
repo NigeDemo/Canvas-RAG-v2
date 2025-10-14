@@ -58,6 +58,51 @@ if 'system_status' not in st.session_state:
 if 'vision_enabled' not in st.session_state:
     st.session_state.vision_enabled = True
 
+
+def _canvas_base_url() -> str:
+    """Return the Canvas host base URL (without /api prefix)."""
+    base_url = settings.canvas_api_url or ""
+    if not base_url:
+        return ""
+    if "/api" in base_url:
+        base_url = base_url.split("/api", 1)[0]
+    return base_url.rstrip("/")
+
+
+def _prefer_canvas_preview(url: str) -> str:
+    """Convert Canvas file URLs to preview links when possible."""
+    if not url:
+        return ""
+
+    # Normalize whitespace and trailing slashes but preserve querystring
+    url = url.strip()
+
+    if "/files/" not in url:
+        return url
+
+    base_part, _, query = url.partition("?")
+
+    if "/download" in base_part:
+        base_part = base_part.replace("/download", "/preview")
+    elif not base_part.endswith("/preview"):
+        base_part = base_part.rstrip("/") + "/preview"
+
+    return f"{base_part}?{query}" if query else base_part
+
+
+def ensure_canvas_url(url: Optional[str]) -> str:
+    """Ensure URLs used in the UI resolve to the Canvas host instead of localhost."""
+    if not url:
+        return ""
+    url = url.strip()
+    if url.startswith("http://") or url.startswith("https://"):
+        return _prefer_canvas_preview(url)
+    base = _canvas_base_url()
+    if not base:
+        return _prefer_canvas_preview(url)
+    resolved = f"{base}/{url.lstrip('/')}"
+    return _prefer_canvas_preview(resolved)
+
 def initialize_vision_rag():
     """Initialize the vision-enhanced RAG system."""
     try:
@@ -358,6 +403,45 @@ def process_user_query(query: str):
                                     st.success(f"✅ Image {i+1}: {analysis_type} analysis completed")
                                 else:
                                     st.error(f"❌ Image {i+1}: {analysis_type} analysis failed")
+
+                    if result.image_references:
+                        st.markdown("### 📷 Retrieved Canvas Images")
+                        for ref in result.image_references:
+                            link = ensure_canvas_url(ref.get('image_url') or ref.get('file_url') or ref.get('source_url'))
+                            if not link:
+                                continue
+
+                            # Build a helpful label with sensible fallbacks
+                            alt_text = (ref.get('alt_text') or "").strip()
+                            page_title = (ref.get('page_title') or "").strip()
+                            file_name = (ref.get('file_name') or ref.get('filename') or "").strip()
+                            content_type = (ref.get('content_type') or ref.get('type') or "").strip()
+
+                            if alt_text:
+                                label = alt_text
+                            elif page_title and content_type:
+                                label = f"{page_title} ({content_type})"
+                            elif page_title:
+                                label = page_title
+                            elif file_name:
+                                label = file_name
+                            else:
+                                label = "Canvas image"
+
+                            module = ref.get('parent_module')
+                            # Compose contextual details: module, page title, filename, content type
+                            context_bits = []
+                            if module:
+                                context_bits.append(module)
+                            if page_title:
+                                context_bits.append(page_title)
+                            if file_name:
+                                context_bits.append(file_name)
+                            if content_type:
+                                context_bits.append(content_type)
+                            details = f" — {' | '.join(context_bits)}" if context_bits else ""
+
+                            st.markdown(f"- [{label}]({link}){details}")
                     
                     # Add to chat history
                     st.session_state.chat_history.append((query, result.response, metadata))

@@ -7,8 +7,9 @@ from typing import List, Dict, Any, Tuple, Optional
 import json
 
 from PIL import Image
-from pdf2image import convert_from_path
+import fitz  # PyMuPDF
 import pypdf
+from pptx import Presentation
 from bs4 import BeautifulSoup
 import re
 
@@ -157,7 +158,8 @@ Focus on technical architectural content that would be relevant for construction
     
     def process_pdf(self, pdf_path: Path) -> List[Dict[str, Any]]:
         """
-        Process PDF file into pages with text and images.
+        Process PDF file into pages with text and images using PyMuPDF.
+        Falls back to text-only extraction if PyMuPDF fails.
         
         Args:
             pdf_path: Path to PDF file
@@ -170,22 +172,27 @@ Focus on technical architectural content that would be relevant for construction
             
             pages_data = []
             
-            # Convert PDF to images
-            images = convert_from_path(
-                str(pdf_path), 
-                dpi=self.pdf_dpi,
-                fmt='PNG'
-            )
-            
-            # Extract text using pypdf
-            with open(pdf_path, 'rb') as file:
-                pdf_reader = pypdf.PdfReader(file)
+            # Try PyMuPDF for full extraction (text + images)
+            try:
+                doc = fitz.open(str(pdf_path))
                 
-                for page_num, (pdf_page, page_image) in enumerate(zip(pdf_reader.pages, images)):
-                    # Extract text
-                    text = pdf_page.extract_text()
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
                     
-                    # Process image
+                    # Extract text
+                    text = page.get_text()
+                    
+                    # Render page to image
+                    # Use matrix to set DPI (2.0 = 144 DPI, which is good quality)
+                    zoom = self.pdf_dpi / 72  # PyMuPDF uses 72 DPI by default
+                    mat = fitz.Matrix(zoom, zoom)
+                    pix = page.get_pixmap(matrix=mat)
+                    
+                    # Convert pixmap to PIL Image
+                    img_data = pix.tobytes("png")
+                    page_image = Image.open(BytesIO(img_data))
+                    
+                    # Resize if needed
                     resized_image = self.resize_image(page_image)
                     image_base64 = self.image_to_base64(resized_image)
                     
@@ -200,12 +207,106 @@ Focus on technical architectural content that would be relevant for construction
                     }
                     
                     pages_data.append(page_data)
-            
-            logger.info(f"Processed {len(pages_data)} pages from PDF")
-            return pages_data
+                
+                doc.close()
+                logger.info(f"Processed {len(pages_data)} pages from PDF with PyMuPDF")
+                return pages_data
+                
+            except Exception as pymupdf_error:
+                logger.warning(f"PyMuPDF processing failed: {pymupdf_error}")
+                logger.info(f"Falling back to text-only extraction for {pdf_path.name}")
+                return self._process_pdf_text_only(pdf_path)
             
         except Exception as e:
             logger.error(f"Error processing PDF {pdf_path}: {e}")
+            return []
+    
+    def _process_pdf_text_only(self, pdf_path: Path) -> List[Dict[str, Any]]:
+        """
+        Process PDF file extracting text only (fallback when Poppler is not available).
+        
+        Args:
+            pdf_path: Path to PDF file
+            
+        Returns:
+            List of page dictionaries with text data only
+        """
+        try:
+            pages_data = []
+            
+            with open(pdf_path, 'rb') as file:
+                pdf_reader = pypdf.PdfReader(file)
+                
+                for page_num, pdf_page in enumerate(pdf_reader.pages):
+                    # Extract text
+                    text = pdf_page.extract_text()
+                    
+                    if text.strip():  # Only add if there's actual text
+                        page_data = {
+                            "page_number": page_num + 1,
+                            "text": text.strip(),
+                            "source_file": str(pdf_path),
+                            "content_type": "pdf_text",
+                            "note": "Text-only extraction (Poppler not available)"
+                        }
+                        pages_data.append(page_data)
+            
+            logger.info(f"Processed {len(pages_data)} pages (text-only) from PDF")
+            return pages_data
+            
+        except Exception as e:
+            logger.error(f"Error in text-only PDF processing {pdf_path}: {e}")
+            return []
+    
+    def process_pptx(self, pptx_path: Path) -> List[Dict[str, Any]]:
+        """
+        Process PowerPoint file into slides with text and notes.
+        
+        Args:
+            pptx_path: Path to PowerPoint file
+            
+        Returns:
+            List of slide dictionaries with text and notes
+        """
+        try:
+            logger.info(f"Processing PowerPoint: {pptx_path}")
+            
+            slides_data = []
+            prs = Presentation(str(pptx_path))
+            
+            for slide_num, slide in enumerate(prs.slides, 1):
+                # Extract text from all shapes
+                slide_text = []
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text:
+                        slide_text.append(shape.text)
+                
+                # Extract notes
+                notes_text = ""
+                if slide.has_notes_slide:
+                    notes_slide = slide.notes_slide
+                    if notes_slide.notes_text_frame:
+                        notes_text = notes_slide.notes_text_frame.text
+                
+                # Combine text
+                combined_text = "\\n\\n".join(slide_text)
+                if notes_text:
+                    combined_text += f"\\n\\nNotes: {notes_text}"
+                
+                slide_data = {
+                    "slide_number": slide_num,
+                    "text": combined_text.strip(),
+                    "source_file": str(pptx_path),
+                    "content_type": "pptx_slide"
+                }
+                
+                slides_data.append(slide_data)
+            
+            logger.info(f"Processed {len(slides_data)} slides from PowerPoint")
+            return slides_data
+            
+        except Exception as e:
+            logger.error(f"Error processing PowerPoint {pptx_path}: {e}")
             return []
     
     def process_image(self, image_path: Path) -> Optional[Dict[str, Any]]:
@@ -272,14 +373,36 @@ Focus on technical architectural content that would be relevant for construction
             
             # Extract image URLs
             image_urls = []
+            seen_images: Dict[str, Dict[str, str]] = {}
             for img in soup.find_all('img'):
                 src = img.get('src')
-                if src:
-                    image_urls.append({
+                if not src:
+                    continue
+
+                alt_text = img.get('alt', '')
+                title_text = img.get('title', '')
+
+                if src not in seen_images:
+                    seen_images[src] = {
                         'src': src,
-                        'alt': img.get('alt', ''),
-                        'title': img.get('title', '')
-                    })
+                        'alt': alt_text,
+                        'title': title_text
+                    }
+                else:
+                    existing = seen_images[src]
+
+                    if alt_text and alt_text not in existing['alt']:
+                        if existing['alt']:
+                            existing['alt'] = f"{existing['alt']} | {alt_text}"
+                        else:
+                            existing['alt'] = alt_text
+
+                    if title_text and title_text not in existing['title']:
+                        if existing['title']:
+                            existing['title'] = f"{existing['title']} | {title_text}"
+                        else:
+                            existing['title'] = title_text
+            image_urls = list(seen_images.values())
             
             # Extract links
             links = []
@@ -583,12 +706,13 @@ Focus on technical architectural content that would be relevant for construction
         
         return chunks
     
-    def process_content_item(self, content_item: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def process_content_item(self, content_item: Dict[str, Any], parent_module: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Process a single content item (page or file).
+        Process a single content item (page, assignment, module, or file).
         
         Args:
             content_item: Content item from ingestion
+            parent_module: Optional Canvas module title providing hierarchy context
             
         Returns:
             List of processed content segments
@@ -596,6 +720,9 @@ Focus on technical architectural content that would be relevant for construction
         processed_segments = []
         
         try:
+            # Determine effective parent module for this content and any nested segments
+            parent_module_value = content_item.get("parent_module") or parent_module or ""
+            
             if content_item["type"] == "page":
                 # Process HTML page
                 html_content = self.extract_html_content(content_item.get("body", ""))
@@ -609,7 +736,8 @@ Focus on technical architectural content that would be relevant for construction
                         "title": content_item["title"],
                         "url": content_item["url"],
                         "created_at": content_item.get("created_at"),
-                        "updated_at": content_item.get("updated_at")
+                        "updated_at": content_item.get("updated_at"),
+                        "parent_module": parent_module_value
                     },
                     html_content.get("sections", [])  # Pass HTML sections
                 )
@@ -625,7 +753,8 @@ Focus on technical architectural content that would be relevant for construction
                         "source_id": content_item["id"],
                         "source_type": "page",
                         "page_title": content_item["title"],
-                        "url": content_item["url"]
+                        "url": content_item["url"],
+                        "parent_module": parent_module_value
                     }
                     
                     # Add vision analysis for the image URL
@@ -634,11 +763,96 @@ Focus on technical architectural content that would be relevant for construction
                     
                     processed_segments.append(img_segment)
             
+            elif content_item["type"] == "assignment":
+                # Process assignment (similar to page)
+                html_content = self.extract_html_content(content_item.get("body", ""))
+                
+                # Create text chunks with assignment-specific metadata
+                text_chunks = self.chunk_text(
+                    html_content["text"],
+                    {
+                        "source_id": content_item["id"],
+                        "source_type": "assignment",
+                        "title": content_item["title"],
+                        "url": content_item.get("html_url", ""),
+                        "due_at": content_item.get("due_at"),
+                        "points_possible": content_item.get("points_possible"),
+                        "parent_module": parent_module_value
+                    },
+                    html_content.get("sections", [])
+                )
+                processed_segments.extend(text_chunks)
+                
+                # Process images in assignment
+                for img_url in html_content["image_urls"]:
+                    img_segment = {
+                        "content_type": "image_reference",
+                        "image_url": img_url["src"],
+                        "alt_text": img_url["alt"],
+                        "title": img_url["title"],
+                        "source_id": content_item["id"],
+                        "source_type": "assignment",
+                        "page_title": content_item["title"],
+                        "url": content_item.get("html_url", ""),
+                        "parent_module": parent_module_value
+                    }
+                    vision_data = self._analyze_image_content(img_url["src"], img_url["alt"])
+                    img_segment.update(vision_data)
+                    processed_segments.append(img_segment)
+            
+            elif content_item["type"] == "module":
+                # Process module structure
+                module_text = f"Module: {content_item['title']}\n\n"
+                
+                # Add module items
+                if "items" in content_item:
+                    for item in content_item["items"]:
+                        item_type = item.get("type", "unknown")
+                        item_title = item.get("title", "Untitled")
+                        module_text += f"- [{item_type}] {item_title}\n"
+                        
+                        # If item has embedded page content, process it
+                        if "content" in item and isinstance(item["content"], dict):
+                            # Recursively process the page content
+                            page_segments = self.process_content_item(
+                                item["content"],
+                                parent_module=content_item["title"]
+                            )
+                            processed_segments.extend(page_segments)
+                        
+                        # If item is a File with downloaded content, process it
+                        elif item.get("type") == "File" and "file_path" in item:
+                            # Create a file content item and process it
+                            file_content_item = {
+                                "type": "file",
+                                "path": item["file_path"],
+                                "id": item["id"],
+                                "title": item.get("title", "Untitled"),
+                                "content_type": item.get("content_type", "application/octet-stream"),
+                                "filename": item.get("filename", ""),
+                                "parent_module": content_item["title"],
+                                "url": item.get("html_url") or item.get("url") or item.get("file_url") or item.get("download_url", "")
+                            }
+                            file_segments = self.process_content_item(file_content_item)
+                            processed_segments.extend(file_segments)
+                
+                # Create a single chunk for the module overview
+                module_chunk = {
+                    "text": module_text,
+                    "content_type": "module_overview",
+                    "source_id": content_item["id"],
+                    "source_type": "module",
+                    "title": content_item["title"],
+                    "position": content_item.get("position", 0),
+                    "parent_module": content_item["title"]
+                }
+                processed_segments.append(module_chunk)
+            
             elif content_item["type"] == "file":
                 file_path = Path(content_item["path"])
                 
                 if content_item["content_type"] == "application/pdf":
-                    # Process PDF
+                    # Process PDF with PyMuPDF (text + images) or fallback to text-only
                     pdf_pages = self.process_pdf(file_path)
                     
                     for page_data in pdf_pages:
@@ -647,7 +861,8 @@ Focus on technical architectural content that would be relevant for construction
                             "source_id": content_item["id"],
                             "source_type": "file",
                             "filename": content_item["filename"],
-                            "file_url": content_item["url"],
+                            "file_url": content_item.get("url", ""),
+                            "parent_module": content_item.get("parent_module", ""),
                             "created_at": content_item.get("created_at"),
                             "updated_at": content_item.get("updated_at")
                         })
@@ -661,13 +876,49 @@ Focus on technical architectural content that would be relevant for construction
                                     "source_type": "pdf_text",
                                     "filename": content_item["filename"],
                                     "page_number": page_data["page_number"],
-                                    "file_url": content_item["url"]
+                                    "parent_module": content_item.get("parent_module", ""),
+                                    "file_url": content_item.get("url", "")
                                 }
                             )
                             processed_segments.extend(text_chunks)
                         
                         # Add the page as a multimodal segment
                         processed_segments.append(page_data)
+                
+                elif content_item["content_type"] in ["application/vnd.openxmlformats-officedocument.presentationml.presentation", 
+                                                       "application/vnd.ms-powerpoint"]:
+                    # Process PowerPoint (.pptx or .ppt)
+                    pptx_slides = self.process_pptx(file_path)
+                    
+                    for slide_data in pptx_slides:
+                        # Add metadata
+                        slide_data.update({
+                            "source_id": content_item["id"],
+                            "source_type": "file",
+                            "filename": content_item["filename"],
+                            "file_url": content_item.get("url", ""),
+                            "parent_module": content_item.get("parent_module", ""),
+                            "created_at": content_item.get("created_at"),
+                            "updated_at": content_item.get("updated_at")
+                        })
+                        
+                        # Create text chunks from slide content
+                        if slide_data["text"]:
+                            text_chunks = self.chunk_text(
+                                slide_data["text"],
+                                {
+                                    "source_id": content_item["id"],
+                                    "source_type": "pptx_text",
+                                    "filename": content_item["filename"],
+                                    "slide_number": slide_data["slide_number"],
+                                    "parent_module": content_item.get("parent_module", ""),
+                                    "file_url": content_item.get("url", "")
+                                }
+                            )
+                            processed_segments.extend(text_chunks)
+                        
+                        # Add the slide data
+                        processed_segments.append(slide_data)
                 
                 elif content_item["content_type"].startswith("image/"):
                     # Process image
@@ -677,7 +928,8 @@ Focus on technical architectural content that would be relevant for construction
                         image_data.update({
                             "source_id": content_item["id"],
                             "source_type": "file",
-                            "file_url": content_item["url"],
+                            "file_url": content_item.get("url", ""),
+                            "parent_module": content_item.get("parent_module", ""),
                             "created_at": content_item.get("created_at"),
                             "updated_at": content_item.get("updated_at")
                         })
@@ -692,6 +944,11 @@ Focus on technical architectural content that would be relevant for construction
         """
         Process all content from a course metadata file.
         
+        Supports multiple metadata formats:
+        - Pages: {"pages": [...], "files": [...]} or {"page": {...}, "files": [...]}
+        - Assignments: {"assignment": {...}, "files": [...]}
+        - Modules: {"modules": [...]}
+        
         Args:
             metadata_path: Path to course metadata JSON file
             
@@ -705,19 +962,32 @@ Focus on technical architectural content that would be relevant for construction
         
         all_segments = []
         
-        # Handle both course-wide and single-page metadata formats
+        # Handle different metadata formats
         if "pages" in course_metadata:
             # Course-wide format: {"pages": [...], "files": [...]}
             for page in course_metadata.get("pages", []):
                 segments = self.process_content_item(page)
                 all_segments.extend(segments)
+                
         elif "page" in course_metadata:
             # Single-page format: {"page": {...}, "files": [...]}
             page = course_metadata["page"]
             segments = self.process_content_item(page)
             all_segments.extend(segments)
+            
+        elif "assignment" in course_metadata:
+            # Assignment format: {"assignment": {...}, "files": [...]}
+            assignment = course_metadata["assignment"]
+            segments = self.process_content_item(assignment)
+            all_segments.extend(segments)
+            
+        elif "modules" in course_metadata:
+            # Modules format: {"modules": [...]}
+            for module in course_metadata.get("modules", []):
+                segments = self.process_content_item(module)
+                all_segments.extend(segments)
         
-        # Process files (same for both formats)
+        # Process files (common to pages and assignments)
         for file_item in course_metadata.get("files", []):
             segments = self.process_content_item(file_item)
             all_segments.extend(segments)

@@ -388,6 +388,236 @@ class CanvasIngester:
         logger.info(f"Metadata saved to: {metadata_path}")
         
         return metadata
+    
+    def extract_assignment_content(self, assignment) -> Dict[str, Any]:
+        """
+        Extract content from a Canvas assignment.
+        
+        Args:
+            assignment: Canvas assignment object
+            
+        Returns:
+            Dictionary with assignment content and metadata
+        """
+        try:
+            content = {
+                "id": str(assignment.id),
+                "title": assignment.name,
+                "type": "assignment",
+                "body": getattr(assignment, 'description', ''),
+                "points_possible": getattr(assignment, 'points_possible', 0),
+                "due_at": str(assignment.due_at) if hasattr(assignment, 'due_at') and assignment.due_at else None,
+                "submission_types": getattr(assignment, 'submission_types', []),
+                "html_url": getattr(assignment, 'html_url', ''),
+            }
+            
+            # Add rubric if available
+            if hasattr(assignment, 'rubric') and assignment.rubric:
+                content['rubric'] = assignment.rubric
+            
+            logger.info(f"Extracted assignment: {assignment.name}")
+            return content
+            
+        except Exception as e:
+            logger.error(f"Error extracting assignment content: {e}")
+            return {}
+    
+    async def ingest_assignment(self, course_id: str, assignment_id: int) -> Dict[str, Any]:
+        """
+        Ingest content from a specific Canvas assignment.
+        
+        Args:
+            course_id: Canvas course ID
+            assignment_id: Assignment ID number
+            
+        Returns:
+            Dictionary with assignment and files data
+        """
+        logger.info(f"Starting ingestion for assignment ID: {assignment_id} in course {course_id}")
+        
+        course = self.get_course(course_id)
+        
+        try:
+            assignment = course.get_assignment(assignment_id)
+        except Exception as e:
+            logger.error(f"Could not retrieve assignment {assignment_id}: {e}")
+            return {}
+        
+        # Extract assignment content
+        assignment_content = self.extract_assignment_content(assignment)
+        if not assignment_content:
+            logger.error(f"Could not extract content from assignment: {assignment_id}")
+            return {}
+        
+        # Get files referenced in assignment (if any)
+        download_dir = settings.raw_data_dir / "files"
+        file_paths = []
+        
+        # Assignments might reference files in their description
+        if assignment_content.get('body'):
+            referenced_files = self.get_page_files(course, assignment_content['body'])
+            for file in referenced_files:
+                content_type = self.get_content_type(file)
+                if content_type in ['application/pdf'] or content_type.startswith('image/'):
+                    file_path = await self.download_file(file, download_dir)
+                    if file_path:
+                        file_info = {
+                            "id": file.id,
+                            "filename": file.filename,
+                            "path": str(file_path),
+                            "url": file.url,
+                            "content_type": content_type,
+                            "size": getattr(file, 'size', 0),
+                            "type": "file"
+                        }
+                        file_paths.append(file_info)
+        
+        # Save metadata
+        metadata = {
+            "course_id": course_id,
+            "assignment": assignment_content,
+            "files": file_paths,
+            "ingestion_timestamp": str(asyncio.get_event_loop().time())
+        }
+        
+        safe_assignment_name = str(assignment_id)
+        metadata_path = settings.raw_data_dir / f"assignment_{safe_assignment_name}_metadata.json"
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Assignment ingestion complete. Files: {len(file_paths)}")
+        logger.info(f"Metadata saved to: {metadata_path}")
+        
+        return metadata
+    
+    async def extract_module_content(self, module, course: Course) -> Dict[str, Any]:
+        """
+        Extract content from a Canvas module and its items.
+        
+        Args:
+            module: Canvas module object
+            course: Canvas course object
+            
+        Returns:
+            Dictionary with module content and metadata
+        """
+        try:
+            module_data = {
+                "id": str(module.id),
+                "title": module.name,
+                "type": "module",
+                "position": getattr(module, 'position', 0),
+                "items": []
+            }
+            
+            # Get module items
+            try:
+                items = list(module.get_module_items())
+                download_dir = settings.raw_data_dir / "files"
+                
+                for item in items:
+                    item_data = {
+                        "id": str(item.id),
+                        "title": item.title if hasattr(item, 'title') else 'Untitled',
+                        "type": item.type if hasattr(item, 'type') else 'unknown',
+                        "position": getattr(item, 'position', 0),
+                    }
+                    
+                    # Add type-specific data
+                    if hasattr(item, 'url'):
+                        item_data['url'] = item.url
+                    if hasattr(item, 'html_url'):
+                        item_data['html_url'] = item.html_url
+                    if hasattr(item, 'external_url'):
+                        item_data['external_url'] = item.external_url
+                    if hasattr(item, 'page_url'):
+                        item_data['page_url'] = item.page_url
+                    
+                    # Get actual content for Pages
+                    if item.type == 'Page' and hasattr(item, 'page_url'):
+                        try:
+                            page = course.get_page(item.page_url)
+                            page_content = self.extract_page_content(page)
+                            if page_content:
+                                item_data['content'] = page_content
+                        except Exception as e:
+                            logger.warning(f"Could not fetch page content for module item: {e}")
+                    
+                    # Download Files (PDFs, PPTx, etc.) from module items
+                    elif item.type == 'File' and hasattr(item, 'url'):
+                        try:
+                            # Get the file object from Canvas
+                            # Module items have content_id which is the file ID
+                            if hasattr(item, 'content_id'):
+                                file_id = item.content_id
+                                file = course.get_file(file_id)
+                                
+                                # Download the file
+                                file_path = await self.download_file(file, download_dir)
+                                if file_path:
+                                    item_data['file_path'] = str(file_path)
+                                    item_data['filename'] = file.filename
+                                    item_data['content_type'] = self.get_content_type(file)
+                                    item_data['size'] = getattr(file, 'size', 0)
+                                    logger.info(f"Downloaded module file: {file.filename}")
+                        except Exception as e:
+                            logger.warning(f"Could not download file for module item '{item.title}': {e}")
+                    
+                    module_data['items'].append(item_data)
+                    
+            except Exception as e:
+                logger.warning(f"Could not get module items: {e}")
+            
+            logger.info(f"Extracted module: {module.name} with {len(module_data['items'])} items")
+            return module_data
+            
+        except Exception as e:
+            logger.error(f"Error extracting module content: {e}")
+            return {}
+    
+    async def ingest_modules(self, course_id: str) -> Dict[str, Any]:
+        """
+        Ingest all modules from a Canvas course.
+        
+        Args:
+            course_id: Canvas course ID
+            
+        Returns:
+            Dictionary with all modules and their content
+        """
+        logger.info(f"Starting ingestion of modules for course {course_id}")
+        
+        course = self.get_course(course_id)
+        
+        try:
+            modules = list(course.get_modules())
+            logger.info(f"Found {len(modules)} modules")
+        except Exception as e:
+            logger.error(f"Could not retrieve modules: {e}")
+            return {}
+        
+        # Extract content from each module
+        module_contents = []
+        for module in modules:
+            module_data = await self.extract_module_content(module, course)
+            if module_data:
+                module_contents.append(module_data)
+        
+        # Save metadata
+        metadata = {
+            "course_id": course_id,
+            "modules": module_contents,
+            "ingestion_timestamp": str(asyncio.get_event_loop().time())
+        }
+        
+        metadata_path = settings.raw_data_dir / f"modules_{course_id}_metadata.json"
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Modules ingestion complete. Total modules: {len(module_contents)}")
+        logger.info(f"Metadata saved to: {metadata_path}")
+        
+        return metadata
 
 async def main():
     """Main function for standalone execution."""

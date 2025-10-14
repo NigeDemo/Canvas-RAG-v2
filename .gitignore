@@ -59,6 +59,10 @@ data/processed/
 data/chroma_db/
 logs/
 *.log
+/.streamlit/
+
+# Streamlit secrets (redundant if .streamlit/ is ignored, kept for clarity)
+.streamlit/secrets.toml
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
@@ -80,9 +84,15 @@ models/
 .pytest_cache/
 .mypy_cache/
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # ChromaDB
 chroma.sqlite3
+chroma_db/
+chroma_db_backups/
+data/chroma_db_backups/
 
 # Debug directory and temporary files
 debug/
@@ -104,6 +114,10 @@ test_fixes.py
 test_changes.txt
 CURRENT_ISSUES.md
 *_DEBUG_*.md
+
+# Ensure essential debug/inspection tools are tracked
+!debug_db.py
+!check_section_headings.py
 
 # Vision AI cache
 data/cache/

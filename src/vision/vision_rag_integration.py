@@ -176,6 +176,37 @@ class VisionEnhancedRAG:
         """Extract image references from search results."""
         if not search_results:
             return []
+
+        def normalize_canvas_url(url: Optional[str]) -> str:
+            if not url:
+                return ""
+            url = url.strip()
+            if url.startswith("http://") or url.startswith("https://"):
+                return url
+
+            base_url = settings.canvas_api_url or ""
+            if not base_url:
+                return url
+
+            # Remove /api/... segments to get the Canvas host root
+            if "/api" in base_url:
+                base_url = base_url.split("/api", 1)[0]
+            base_url = base_url.rstrip("/")
+            url = url.lstrip("/")
+            return f"{base_url}/{url}" if base_url else url
+
+        def prefer_canvas_preview(url: str) -> str:
+            if not url or "/files/" not in url:
+                return url
+
+            base_part, _, query = url.partition("?")
+
+            if "/download" in base_part:
+                base_part = base_part.replace("/download", "/preview")
+            elif not base_part.endswith("/preview"):
+                base_part = base_part.rstrip("/") + "/preview"
+
+            return f"{base_part}?{query}" if query else base_part
         
         # Handle different search result formats
         if hasattr(search_results, 'results'):
@@ -212,12 +243,22 @@ class VisionEnhancedRAG:
             if (content_type in ['image', 'image_reference'] or has_vision_analysis):
                 alt_text = metadata.get('alt_text', '')
                 logger.info(f"Found image reference: '{alt_text}' with vision analysis length: {len(vision_analysis)}")
-                
+
+                raw_image_url = (metadata.get('image_url') or
+                                 metadata.get('file_url') or
+                                 metadata.get('url') or
+                                 metadata.get('source_url', ''))
+                normalized_image_url = prefer_canvas_preview(normalize_canvas_url(raw_image_url))
+
+                source_url = prefer_canvas_preview(normalize_canvas_url(metadata.get('url') or metadata.get('file_url')))
+
                 image_refs.append({
-                    'image_url': metadata.get('image_url', ''),
+                    'image_url': normalized_image_url,
                     'alt_text': alt_text,
                     'page_title': metadata.get('title', metadata.get('page_title', '')),
-                    'source_url': metadata.get('url', ''),
+                    'parent_module': metadata.get('parent_module', ''),
+                    'source_url': source_url,
+                    'file_url': prefer_canvas_preview(normalize_canvas_url(metadata.get('file_url'))),
                     'vision_analysis': vision_analysis,
                     'content_type': content_type
                 })
@@ -229,7 +270,7 @@ class VisionEnhancedRAG:
                                    query: str, 
                                    text_context: str, 
                                    image_references: List[Dict[str, Any]]) -> str:
-        """Generate text-only response as fallback."""
+        """Generate text-only response using appropriate template."""
         # Handle case where no search engine is available
         if not text_context and not image_references:
             return f"""I apologize, but I don't have access to any course content to answer your question about "{query}".
@@ -246,36 +287,44 @@ To get meaningful responses, please:
 
 You can still use the direct image analysis feature by uploading an image in the sidebar."""
         
+        # Analyze query to determine intent (use QueryProcessor)
+        query_analysis = self.query_processor.analyze_query(query)
+        intent = query_analysis.get('intent', 'factual')
+        
+        logger.info(f"Generating text-only response with intent: {intent}")
+        
         # Format image references for text-only response
         image_list = []
         for i, img_ref in enumerate(image_references, 1):
             alt_text = img_ref.get('alt_text', 'Unknown')
             url = img_ref.get('image_url', '#')
-            image_list.append(f"{i}. [{alt_text}]({url})")
+            page_title = img_ref.get('page_title', '')
+            
+            if page_title:
+                image_list.append(f"{i}. [{alt_text}]({url}) - From: {page_title}")
+            else:
+                image_list.append(f"{i}. [{alt_text}]({url})")
         
         formatted_images = "\n".join(image_list) if image_list else "No images available."
         
-        # Create basic prompt
-        prompt = f"""You are an expert assistant helping architecture students with questions about architectural drawings and design.
-
-Context from Canvas materials:
-{text_context if text_context else "No text context available."}
-
-Available Images:
-{formatted_images}
-
-Student Question: {query}
-
-Instructions:
-- Provide a clear, accurate answer based on the context provided
-- Reference specific images when relevant using markdown links
-- If the information isn't in the context, say so clearly
-- Focus on practical application for architecture students
-- If no context is available, provide general guidance about the topic
-
-Answer:"""
+        # Add images to context if available
+        context_with_images = text_context if text_context else "No text context available."
+        if image_list:
+            context_with_images += f"\n\nAvailable Images:\n{formatted_images}"
+        else:
+            context_with_images += "\n\nAvailable Images:\nNo images were retrieved in the current search results."
         
+        # Use ResponseGenerator with appropriate template
         try:
+            # Get the template from ResponseGenerator (it has our module-aware templates)
+            from ..generation.llm_integration import PromptTemplate
+            
+            template_manager = PromptTemplate()
+            template = template_manager.templates.get(intent, template_manager.templates['factual'])
+            
+            # Format the prompt with context
+            prompt = template.format(context=context_with_images, query=query)
+            
             return self.response_generator.llm_provider.generate_response(prompt)
         except Exception as e:
             logger.error(f"Error generating text-only response: {e}")

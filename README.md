@@ -53,7 +53,7 @@ This system provides a natural-language interface to query Canvas LMS pages cont
 - **Database**: ChromaDB  
 - **Status**: Phase 2+ Complete (Section-Aware) ✅
 
-## �🚀 Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -68,6 +68,8 @@ git clone <repository-url>
 cd Canvas-RAG-v2
 pip install -r requirements.txt
 ```
+
+For a structured map of all docs and where to find authoritative references, see docs/README.md.
 
 ### Configuration
 

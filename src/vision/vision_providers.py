@@ -103,6 +103,41 @@ class OpenAIVisionProvider(VisionProvider):
             return 'bmp'
         else:
             return 'png'  # Default fallback
+    
+    def _convert_to_supported_format(self, image_data: bytes, current_format: str) -> tuple[bytes, str]:
+        """Convert image to OpenAI-supported format if needed."""
+        # OpenAI supports: png, jpeg, gif, webp
+        supported_formats = ['png', 'jpeg', 'gif', 'webp']
+        
+        if current_format in supported_formats:
+            return image_data, current_format
+        
+        # Convert unsupported formats (BMP, etc.) to PNG
+        try:
+            from PIL import Image
+            from io import BytesIO
+            
+            logger.info(f"Converting {current_format.upper()} to PNG for OpenAI compatibility")
+            
+            # Open the image
+            img = Image.open(BytesIO(image_data))
+            
+            # Convert to RGB if necessary (for RGBA, P, etc.)
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Save as PNG
+            output = BytesIO()
+            img.save(output, format='PNG')
+            converted_data = output.getvalue()
+            
+            logger.info(f"Successfully converted {current_format.upper()} to PNG")
+            return converted_data, 'png'
+            
+        except Exception as e:
+            logger.error(f"Failed to convert {current_format} to supported format: {e}")
+            # Return original and hope for the best
+            return image_data, current_format
 
     def analyze_image(self, image_data: Union[str, bytes], prompt: str, **kwargs) -> Dict[str, Any]:
         """
@@ -120,6 +155,10 @@ class OpenAIVisionProvider(VisionProvider):
             # Prepare image data
             if isinstance(image_data, bytes):
                 image_format = self._detect_image_format(image_data)
+                
+                # Convert to supported format if needed
+                image_data, image_format = self._convert_to_supported_format(image_data, image_format)
+                
                 try:
                     image_b64 = base64.b64encode(image_data).decode('utf-8')
                 except Exception as e:

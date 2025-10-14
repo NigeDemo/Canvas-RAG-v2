@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     canvas_api_token: str = Field(default="", env="CANVAS_API_TOKEN")
     canvas_course_id: str = Field(default="", env="CANVAS_COURSE_ID")
     
+    # Multi-Content Pipeline Configuration
+    canvas_multi_page_urls: str = Field(default="", env="CANVAS_MULTI_PAGE_URLS")
+    # Format: Comma-separated page URLs, e.g., "home-page,construction-drawing-package-2"
+    
+    canvas_assignment_ids: str = Field(default="", env="CANVAS_ASSIGNMENT_IDS")
+    # Format: Comma-separated assignment IDs, e.g., "304961,304962"
+    
+    canvas_ingest_modules: str = Field(default="false", env="CANVAS_INGEST_MODULES")
+    # Set to 'true' to ingest all course modules with embedded content
+    
     # OpenAI Configuration
     openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4-vision-preview", env="OPENAI_MODEL")
@@ -87,6 +97,25 @@ class Settings(BaseSettings):
         self.raw_data_dir.mkdir(exist_ok=True)
         self.processed_data_dir.mkdir(exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
+    
+    @property
+    def multi_page_urls_list(self) -> list[str]:
+        """Parse comma-separated page URLs into a list."""
+        if not self.canvas_multi_page_urls:
+            return []
+        return [url.strip() for url in self.canvas_multi_page_urls.split(',') if url.strip()]
+    
+    @property
+    def assignment_ids_list(self) -> list[int]:
+        """Parse comma-separated assignment IDs into a list of integers."""
+        if not self.canvas_assignment_ids:
+            return []
+        return [int(id.strip()) for id in self.canvas_assignment_ids.split(',') if id.strip()]
+    
+    @property
+    def should_ingest_modules(self) -> bool:
+        """Check if module ingestion is enabled."""
+        return self.canvas_ingest_modules.lower() == "true"
     
     class Config:
         env_file = ".env"

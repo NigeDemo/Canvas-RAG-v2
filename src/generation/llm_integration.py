@@ -140,6 +140,55 @@ Instructions:
 
 Answer:""",
 
+            'module_content': """You are an expert assistant helping architecture students navigate their Canvas course modules.
+
+Important Note About Canvas Course Structure:
+- Files and materials are placed in Canvas modules by the instructor for when students need them
+- Prep materials for upcoming sessions may appear in earlier modules
+- For example: "Session 5" prep materials may be in the "Session 4" module
+- The module structure reflects teaching logistics, not just content naming
+
+Context: The following content was retrieved from Canvas course materials:
+
+{context}
+
+Student Question: {query}
+
+Instructions:
+- Answer based on what's actually IN the specified Canvas module, not what the files are named
+- If you find prep materials (files for future sessions) in the module, mention them clearly
+- Distinguish between: 
+  1. Main module content (what's taught that week)
+  2. Prep materials (content for upcoming sessions)
+- Explain if materials for a session are split across modules
+- Include Canvas module names and file names in your response
+- Be specific about what students will find where
+
+Answer:""",
+
+                        'module_image_listing': """You are an expert assistant helping architecture students locate the exact drawings and images inside their Canvas modules.
+
+Important Note About Canvas Course Structure:
+- Files and materials may be organized in earlier modules as prep for a later session
+- Image references often live alongside text chunks and vision analysis metadata
+- Students need clickable links to open the actual drawings in Canvas
+
+Context: The following content was retrieved from Canvas course materials (including any image references):
+
+{context}
+
+Student Question: {query}
+
+Instructions:
+- List every relevant image or drawing actually found in the retrieved context
+- For each item include: drawing title/description, Canvas module name, and a clickable link
+- If vision analysis text is available, summarize what the drawing shows in one sentence
+- Group results by module when possible so students know where to click in Canvas
+- If no images were retrieved, state that clearly and suggest checking the specific module or re-running ingestion
+- Do not invent images—only reference entries that include real Canvas URLs
+
+Answer:""",
+
             'visual_reasoning': """You are an expert in architectural drawing analysis helping students understand visual elements in technical drawings.
 
 Context: The following content and images were retrieved from Canvas course materials:
@@ -225,14 +274,21 @@ class ResponseGenerator:
             
             # Create source information
             source_info = []
+            
+            # Add Canvas module information if available
+            if metadata.get('parent_module'):
+                source_info.append(f"Canvas Module: {metadata['parent_module']}")
+            
             if metadata.get('source_type') == 'page':
-                source_info.append(f"Canvas Page: {metadata.get('title', 'Unknown')}")
+                source_info.append(f"Page: {metadata.get('title', 'Unknown')}")
                 if metadata.get('url'):
                     source_info.append(f"Link: {metadata['url']}")
             elif metadata.get('source_type') == 'file':
                 source_info.append(f"File: {metadata.get('filename', 'Unknown')}")
                 if metadata.get('page_number'):
                     source_info.append(f"Page {metadata['page_number']}")
+                elif metadata.get('slide_number'):
+                    source_info.append(f"Slide {metadata['slide_number']}")
                 if metadata.get('file_url'):
                     source_info.append(f"Link: {metadata['file_url']}")
             
@@ -246,7 +302,7 @@ class ResponseGenerator:
                 content_part += f"Content: {result.text[:500]}...\n"
             
             # Add image information if present
-            if metadata.get('content_type') in ['pdf_page', 'image']:
+            if metadata.get('content_type') in ['pdf_page', 'image', 'pptx_slide']:
                 content_part += "[Note: This source contains visual content - images or drawings]\n"
             
             content_part += f"Relevance Score: {result.score:.3f}\n"

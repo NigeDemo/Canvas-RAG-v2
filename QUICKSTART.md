@@ -96,6 +96,13 @@ Before asking questions, you need to run the pipeline to ingest Canvas content:
 python scripts\run_pipeline.py --course-id YOUR_COURSE_ID --page-url your-page-slug
 ```
 
+**Optional: Quick smoke test for image retrieval**
+```bash
+# Validate that image queries return Canvas image links and a concise response
+python scripts\smoke_test_images.py
+```
+Expected: Each query prints SUCCESS: True, a list of image URLs, and the start of an answer.
+
 **VS Code Users:**
 You can also use the pre-configured tasks:
 - `Ctrl+Shift+P` → "Tasks: Run Task" → "Run Vision Chat App"
@@ -111,7 +118,7 @@ You can also use the pre-configured tasks:
 6. **Structure Queries** - Support for "what sections are on this page?" queries
 
 ### Known Issues Needing Work
-1. **BM25 not initializing** - only vector search works
+1. **BM25** - Active in current build (auto-populates from existing text docs). If you see sparse index count = 0, rebuild index or check logs.
 2. **Vision caching** - Could be optimized for better performance
 3. **Multimodal embeddings** - Currently using text-only embeddings
 

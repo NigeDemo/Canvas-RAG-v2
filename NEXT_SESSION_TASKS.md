@@ -114,6 +114,7 @@ python scripts/run_pipeline.py --course-id 45166 --page-url construction-drawing
 2. **Performance Optimization**: Query response times could be improved
 3. **Missing 5th Section**: Legacy issue with section detection (lower priority)
 4. **Embedding Model Strategy**: Need resolution for OpenAI quota limitations
+5. **Canvas Link Labels**: Auto-generate descriptive link text when image `alt_text` metadata is missing so preview links render cleanly in the UI
 
 ## 📝 Next Session Notes
 

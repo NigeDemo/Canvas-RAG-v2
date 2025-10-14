@@ -2,6 +2,22 @@
 
 All notable changes to Canvas RAG v2 will be documented in this file.
 
+## [2.0.1] - 2025-10-14 - Docs tidy-up + image UX + smoke test
+
+### Added
+- Scripts: `scripts/smoke_test_images.py` to quickly validate image queries end-to-end
+
+### Changed
+- UI: Improved image label fallback in `src/ui/vision_chat_app.py` (alt_text → page_title (+content_type) → filename → "Canvas image"), plus contextual details (module | page | filename | type)
+- Docs: Centralized documentation index at `docs/README.md` and moved historical/superseded root docs to `docs/archive/`
+
+### Fixed/Verified
+- Retrieval: Image-first hybrid retrieval verified via smoke test; vision cache hit paths confirmed
+- Sparse retrieval: BM25 auto-population active (logs show 479 text docs) and used in hybrid search
+
+### Maintenance
+- Removed duplicated historical Markdown files from repo root (archived copies preserved under `docs/archive/`)
+
 ## [2.0.0] - 2025-07-17 - Phase 2 Complete ✅
 
 ### Added
