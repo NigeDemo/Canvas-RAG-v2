@@ -7,15 +7,28 @@ from typing import List, Dict, Any, Tuple, Optional
 import json
 
 from PIL import Image
-import fitz  # PyMuPDF
 import pypdf
-from pptx import Presentation
 from bs4 import BeautifulSoup
 import re
 
 from ..config.settings import settings
 from ..utils.logger import get_logger
 from ..vision.vision_processor import VisionProcessor
+
+# Optional dependencies
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except Exception:
+    fitz = None  # type: ignore
+    PYMUPDF_AVAILABLE = False
+
+try:
+    from pptx import Presentation  # python-pptx
+    PPTX_AVAILABLE = True
+except Exception:
+    Presentation = None  # type: ignore
+    PPTX_AVAILABLE = False
 
 logger = get_logger(__name__)
 
@@ -172,49 +185,53 @@ Focus on technical architectural content that would be relevant for construction
             
             pages_data = []
             
-            # Try PyMuPDF for full extraction (text + images)
-            try:
-                doc = fitz.open(str(pdf_path))
+            # Try PyMuPDF for full extraction (text + images) if available
+            if PYMUPDF_AVAILABLE:
+                try:
+                    doc = fitz.open(str(pdf_path))
                 
-                for page_num in range(len(doc)):
-                    page = doc[page_num]
+                    for page_num in range(len(doc)):
+                        page = doc[page_num]
                     
-                    # Extract text
-                    text = page.get_text()
+                        # Extract text
+                        text = page.get_text()
                     
-                    # Render page to image
-                    # Use matrix to set DPI (2.0 = 144 DPI, which is good quality)
-                    zoom = self.pdf_dpi / 72  # PyMuPDF uses 72 DPI by default
-                    mat = fitz.Matrix(zoom, zoom)
-                    pix = page.get_pixmap(matrix=mat)
+                        # Render page to image
+                        # Use matrix to set DPI (2.0 = 144 DPI, which is good quality)
+                        zoom = self.pdf_dpi / 72  # PyMuPDF uses 72 DPI by default
+                        mat = fitz.Matrix(zoom, zoom)
+                        pix = page.get_pixmap(matrix=mat)
                     
-                    # Convert pixmap to PIL Image
-                    img_data = pix.tobytes("png")
-                    page_image = Image.open(BytesIO(img_data))
+                        # Convert pixmap to PIL Image
+                        img_data = pix.tobytes("png")
+                        page_image = Image.open(BytesIO(img_data))
                     
-                    # Resize if needed
-                    resized_image = self.resize_image(page_image)
-                    image_base64 = self.image_to_base64(resized_image)
+                        # Resize if needed
+                        resized_image = self.resize_image(page_image)
+                        image_base64 = self.image_to_base64(resized_image)
                     
-                    page_data = {
-                        "page_number": page_num + 1,
-                        "text": text.strip(),
-                        "image_base64": image_base64,
-                        "image_width": resized_image.width,
-                        "image_height": resized_image.height,
-                        "source_file": str(pdf_path),
-                        "content_type": "pdf_page"
-                    }
+                        page_data = {
+                            "page_number": page_num + 1,
+                            "text": text.strip(),
+                            "image_base64": image_base64,
+                            "image_width": resized_image.width,
+                            "image_height": resized_image.height,
+                            "source_file": str(pdf_path),
+                            "content_type": "pdf_page"
+                        }
                     
-                    pages_data.append(page_data)
+                        pages_data.append(page_data)
                 
-                doc.close()
-                logger.info(f"Processed {len(pages_data)} pages from PDF with PyMuPDF")
-                return pages_data
-                
-            except Exception as pymupdf_error:
-                logger.warning(f"PyMuPDF processing failed: {pymupdf_error}")
-                logger.info(f"Falling back to text-only extraction for {pdf_path.name}")
+                    doc.close()
+                    logger.info(f"Processed {len(pages_data)} pages from PDF with PyMuPDF")
+                    return pages_data
+                    
+                except Exception as pymupdf_error:
+                    logger.warning(f"PyMuPDF processing failed: {pymupdf_error}")
+                    logger.info(f"Falling back to text-only extraction for {pdf_path.name}")
+                    return self._process_pdf_text_only(pdf_path)
+            else:
+                logger.info("PyMuPDF not available; using text-only PDF extraction")
                 return self._process_pdf_text_only(pdf_path)
             
         except Exception as e:
@@ -272,6 +289,10 @@ Focus on technical architectural content that would be relevant for construction
             logger.info(f"Processing PowerPoint: {pptx_path}")
             
             slides_data = []
+            if not PPTX_AVAILABLE:
+                logger.info("python-pptx not available; skipping PPTX processing")
+                return slides_data
+
             prs = Presentation(str(pptx_path))
             
             for slide_num, slide in enumerate(prs.slides, 1):
